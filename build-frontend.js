@@ -195,7 +195,20 @@ async function buildFrontend() {
     // Step 3: Copy assets to project root dist/ and static/
     logger.startStep('copy-assets', 'Copying built assets');
 
-    const angularOutputDir = path.join(frontendDir, 'dist', 'browser');
+    // Find the Angular build output directory (could be dist/browser or dist/<project-name>/browser)
+    let angularOutputDir = path.join(frontendDir, 'dist', 'browser');
+    if (!(await pathExists(angularOutputDir))) {
+      // Try to find the actual output directory
+      const distContents = await fs.readdir(path.join(frontendDir, 'dist'));
+      for (const entry of distContents) {
+        const candidate = path.join(frontendDir, 'dist', entry, 'browser');
+        if ((await pathExists(candidate)) && entry !== 'browser') {
+          angularOutputDir = candidate;
+          logger.stepLog(`Found Angular output in: dist/${entry}/browser`);
+          break;
+        }
+      }
+    }
     const distStaticJs = path.join(rootDist, 'static', 'js');
     const distStaticCss = path.join(rootDist, 'static', 'css');
 

@@ -4,5 +4,7 @@
 pub mod connection;
 pub mod models;
 pub mod users;
+pub mod products;
+pub mod orders;
 
 pub use connection::Database;

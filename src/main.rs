@@ -174,11 +174,19 @@ fn main() {
                 return;
             }
             if config.should_create_sample_data() {
+                // Seed sample users
                 if let Err(e) = db.insert_sample_data() {
                     error_handler::record_app_error("MAIN", &e);
-                    return;
                 }
-                info!("Sample data created (if not exists)");
+                // Seed sample products
+                if let Err(e) = db.insert_sample_products() {
+                    error_handler::record_app_error("MAIN", &e);
+                }
+                // Seed sample orders
+                if let Err(e) = db.insert_sample_orders() {
+                    error_handler::record_app_error("MAIN", &e);
+                }
+                info!("Sample data created (users, products, orders)");
             }
             // Log pool stats
             let stats = db.pool_stats();

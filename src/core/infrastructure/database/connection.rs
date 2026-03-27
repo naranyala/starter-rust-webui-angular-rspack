@@ -122,6 +122,22 @@ impl Database {
             [],
         )?;
 
+        // Create orders table
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                total_price REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Pending',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (product_id) REFERENCES products(id)
+            )",
+            [],
+        )?;
+
         // Create indexes for performance
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
@@ -129,6 +145,18 @@ impl Database {
         )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_product_id ON orders(product_id)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)",
             [],
         )?;
 

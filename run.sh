@@ -87,8 +87,8 @@ build_frontend() {
 
     bun build-frontend.js
 
+    # Check required files in root dist/ (the actual runtime output)
     local required_files=(
-        "frontend/dist/browser/index.html"
         "dist/index.html"
         "dist/static/js/main.js"
         "dist/static/js/webui.js"
@@ -120,8 +120,8 @@ build_rust() {
         cargo clean
     fi
 
-    # Build the Rust application
-    cargo build
+    # Build the Rust application using stable toolchain
+    rustup run stable cargo build
 
     if [ ! -f "target/debug/rustwebui-app" ]; then
         print_error "Rust build failed - executable not found!"
@@ -158,8 +158,8 @@ build_release() {
     bun run build:incremental
     cd ..
 
-    # Build Rust in release mode
-    cargo build --release
+    # Build Rust in release mode using stable toolchain
+    rustup run stable cargo build --release
 
     # Run post-build for release
     if [ -f "post-build.sh" ]; then
@@ -170,6 +170,30 @@ build_release() {
     print_status "Release build completed!"
 
     echo ""
+}
+
+# Build and run in development mode
+dev_mode() {
+    print_step "Starting development mode..."
+
+    check_prerequisites
+    install_frontend_deps
+    build_frontend
+    build_rust "--clean"
+    post_build
+
+    print_status "Starting application in development mode..."
+    echo ""
+
+    # Determine which executable to run
+    if [ -f "target/debug/app" ]; then
+        ./target/debug/app
+    elif [ -f "target/debug/rustwebui-app" ]; then
+        ./target/debug/rustwebui-app
+    else
+        print_error "No executable found after build!"
+        exit 1
+    fi
 }
 
 # Run the application
@@ -198,7 +222,7 @@ clean_all() {
 
     # Clean Rust build
     if [ -d "target" ]; then
-        cargo clean
+        rustup run stable cargo clean
         print_status "Rust build artifacts cleaned"
     fi
 
@@ -231,58 +255,63 @@ clean_all() {
 
 # Show help
 show_help() {
-    echo "Usage: $0 [OPTION]"
+    echo "Usage: $0 [COMMAND]"
     echo ""
-    echo "Options:"
-    echo "  (no option)      Build and run the application (default)"
-    echo "  --build           Build only (frontend + Rust)"
-    echo "  --build-frontend  Build frontend only"
-    echo "  --build-rust     Build Rust only"
-    echo "  --release        Build release version"
-    echo "  --run            Run the application (requires build)"
-    echo "  --clean          Clean all build artifacts"
-    echo "  --rebuild        Clean and rebuild everything"
-    echo "  --help, -h       Show this help message"
+    echo "Commands:"
+    echo "  (no command)   Build and run the application (default)"
+    echo "  dev            Build and run in development mode"
+    echo "  build          Build only (frontend + Rust)"
+    echo "  build-frontend Build frontend only"
+    echo "  build-rust     Build Rust only"
+    echo "  release        Build release version"
+    echo "  run            Run the application (requires build)"
+    echo "  clean          Clean all build artifacts"
+    echo "  rebuild        Clean and rebuild everything"
+    echo "  help, -h       Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0               # Build and run"
-    echo "  $0 --build       # Build only"
-    echo "  $0 --rebuild     # Clean and rebuild"
-    echo "  $0 --release     # Build release version"
+    echo "  $0             # Build and run"
+    echo "  $0 dev         # Build and run in development mode"
+    echo "  $0 build       # Build only"
+    echo "  $0 rebuild     # Clean and rebuild"
+    echo "  $0 release     # Build release version"
     echo ""
 }
 
 # Main execution
 main() {
     case "${1:-}" in
-        --build)
+        dev)
+            dev_mode
+            ;;
+        build)
             check_prerequisites
             install_frontend_deps
             build_frontend
             build_rust
             post_build
             ;;
-        --build-frontend)
+        build-frontend)
             check_prerequisites
             install_frontend_deps
             build_frontend
             ;;
-        --build-rust)
+        build-rust)
             check_prerequisites
             build_rust
             post_build
             ;;
-        --release)
+        release)
             check_prerequisites
             build_release
             ;;
-        --run)
+        run)
             run_app
             ;;
-        --clean)
+        clean)
             clean_all
             ;;
-        --rebuild)
+        rebuild)
             clean_all
             check_prerequisites
             install_frontend_deps
@@ -290,7 +319,7 @@ main() {
             build_rust
             post_build
             ;;
-        --help|-h)
+        help|-h)
             show_help
             ;;
         "")
@@ -303,7 +332,7 @@ main() {
             run_app
             ;;
         *)
-            print_error "Unknown option: $1"
+            print_error "Unknown command: $1"
             show_help
             exit 1
             ;;
