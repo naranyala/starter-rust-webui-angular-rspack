@@ -1,11 +1,11 @@
 // src/core/infrastructure/error_handler.rs
 // Enhanced error handling with panic hooks, error tracking, and terminal output
 
+use crate::core::error::ErrorCode;
 use log::{error, info, warn};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::core::error::ErrorCode;
 
 /// Maximum errors to keep in memory
 const MAX_ERROR_HISTORY: usize = 100;
@@ -75,10 +75,10 @@ impl ErrorEntry {
     /// Format for terminal output with colors
     pub fn format_terminal(&self) -> String {
         let severity_color = match self.severity {
-            ErrorSeverity::Info => "\x1b[36m",      // Cyan
-            ErrorSeverity::Warning => "\x1b[33m",   // Yellow
-            ErrorSeverity::Error => "\x1b[31m",     // Red
-            ErrorSeverity::Critical => "\x1b[35m",  // Magenta
+            ErrorSeverity::Info => "\x1b[36m",     // Cyan
+            ErrorSeverity::Warning => "\x1b[33m",  // Yellow
+            ErrorSeverity::Error => "\x1b[31m",    // Red
+            ErrorSeverity::Critical => "\x1b[35m", // Magenta
         };
         let reset = "\x1b[0m";
         let bold = "\x1b[1m";
@@ -118,17 +118,19 @@ impl ErrorEntry {
 fn format_timestamp(ts: u64) -> String {
     let secs = ts / 1000;
     let millis = ts % 1000;
-    
+
     // Simple timestamp formatting
     let datetime = std::time::SystemTime::UNIX_EPOCH
         .checked_add(std::time::Duration::from_secs(secs))
         .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-    
-    let duration = datetime.duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap_or_default();
+
+    let duration = datetime
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
     let hours = (duration.as_secs() % 86400) / 3600;
     let minutes = (duration.as_secs() % 3600) / 60;
     let seconds = duration.as_secs() % 60;
-    
+
     format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, millis)
 }
 
@@ -299,7 +301,7 @@ pub fn init_error_handling() {
 /// Record an error from AppError
 pub fn record_app_error(source: &'static str, err: &crate::core::error::AppError) {
     let error_value = err.to_value();
-    
+
     let severity = match error_value.code {
         ErrorCode::InternalError | ErrorCode::LockPoisoned => ErrorSeverity::Critical,
         ErrorCode::DbConnectionFailed | ErrorCode::DbQueryFailed => ErrorSeverity::Error,
@@ -379,4 +381,310 @@ macro_rules! record_app_error {
     ($source:expr, $err:expr) => {
         $crate::core::infrastructure::error_handler::record_app_error($source, &$err)
     };
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_entry_creation() {
+        let entry = ErrorEntry::new(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::ValidationFailed,
+            "Test error message".to_string(),
+        );
+
+        assert_eq!(entry.severity, ErrorSeverity::Error);
+        assert_eq!(entry.source, "TEST");
+        assert_eq!(entry.code, ErrorCode::ValidationFailed);
+        assert_eq!(entry.message, "Test error message");
+        assert!(entry.id == 0); // ID assigned when recorded
+        assert!(entry.details.is_none());
+        assert!(entry.stack_trace.is_none());
+        assert!(entry.context.is_empty());
+    }
+
+    #[test]
+    fn test_error_entry_with_details() {
+        let entry = ErrorEntry::new(
+            ErrorSeverity::Warning,
+            "TEST",
+            ErrorCode::ResourceNotFound,
+            "Not found".to_string(),
+        )
+        .with_details("Additional details here".to_string());
+
+        assert_eq!(entry.details, Some("Additional details here".to_string()));
+    }
+
+    #[test]
+    fn test_error_entry_with_stack_trace() {
+        let entry = ErrorEntry::new(
+            ErrorSeverity::Critical,
+            "TEST",
+            ErrorCode::InternalError,
+            "Critical error".to_string(),
+        )
+        .with_stack_trace("stack trace line 1\nstack trace line 2".to_string());
+
+        assert_eq!(
+            entry.stack_trace,
+            Some("stack trace line 1\nstack trace line 2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_error_entry_with_context() {
+        let entry = ErrorEntry::new(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::DbQueryFailed,
+            "Query failed".to_string(),
+        )
+        .with_context("user_id".to_string(), "123".to_string())
+        .with_context("query".to_string(), "SELECT * FROM users".to_string());
+
+        assert_eq!(entry.context.len(), 2);
+        assert_eq!(entry.context[0], ("user_id".to_string(), "123".to_string()));
+        assert_eq!(
+            entry.context[1],
+            ("query".to_string(), "SELECT * FROM users".to_string())
+        );
+    }
+
+    #[test]
+    fn test_error_entry_format_terminal() {
+        let entry = ErrorEntry::new(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::ValidationFailed,
+            "Test error".to_string(),
+        )
+        .with_details("Test details".to_string())
+        .with_context("field".to_string(), "email".to_string());
+
+        let formatted = entry.format_terminal();
+
+        // Check that formatting includes key elements
+        assert!(formatted.contains("[ERROR #"));
+        assert!(formatted.contains("TEST"));
+        assert!(formatted.contains("ValidationFailed"));
+        assert!(formatted.contains("Test error"));
+        assert!(formatted.contains("Test details"));
+        assert!(formatted.contains("field"));
+        assert!(formatted.contains("email"));
+    }
+
+    #[test]
+    fn test_error_tracker_record_and_retrieve() {
+        let tracker = ErrorTracker::new();
+
+        tracker.record(ErrorEntry::new(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::InternalError,
+            "Error 1".to_string(),
+        ));
+
+        tracker.record(ErrorEntry::new(
+            ErrorSeverity::Warning,
+            "TEST",
+            ErrorCode::ValidationFailed,
+            "Warning 1".to_string(),
+        ));
+
+        let recent = tracker.get_recent(10);
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0].message, "Warning 1");
+        assert_eq!(recent[1].message, "Error 1");
+    }
+
+    #[test]
+    fn test_error_tracker_summary() {
+        let tracker = ErrorTracker::new();
+
+        tracker.record(ErrorEntry::new(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::InternalError,
+            "Error 1".to_string(),
+        ));
+
+        tracker.record(ErrorEntry::new(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::DbQueryFailed,
+            "Error 2".to_string(),
+        ));
+
+        tracker.record(ErrorEntry::new(
+            ErrorSeverity::Warning,
+            "TEST",
+            ErrorCode::ValidationFailed,
+            "Warning 1".to_string(),
+        ));
+
+        tracker.record(ErrorEntry::new(
+            ErrorSeverity::Critical,
+            "TEST",
+            ErrorCode::InternalError,
+            "Critical 1".to_string(),
+        ));
+
+        let summary = tracker.get_summary();
+        assert_eq!(summary.total, 4);
+        assert_eq!(summary.errors, 2);
+        assert_eq!(summary.warnings, 1);
+        assert_eq!(summary.critical, 1);
+    }
+
+    #[test]
+    fn test_error_tracker_clear() {
+        let tracker = ErrorTracker::new();
+
+        tracker.record(ErrorEntry::new(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::InternalError,
+            "Error 1".to_string(),
+        ));
+
+        tracker.record(ErrorEntry::new(
+            ErrorSeverity::Critical,
+            "TEST",
+            ErrorCode::InternalError,
+            "Critical 1".to_string(),
+        ));
+
+        tracker.clear();
+
+        let summary = tracker.get_summary();
+        assert_eq!(summary.total, 0);
+        assert_eq!(summary.errors, 0);
+        assert_eq!(summary.warnings, 0);
+        assert_eq!(summary.critical, 0);
+
+        let recent = tracker.get_recent(10);
+        assert_eq!(recent.len(), 0);
+    }
+
+    #[test]
+    fn test_error_tracker_max_history() {
+        let tracker = ErrorTracker::new();
+
+        // Record more than MAX_ERROR_HISTORY errors
+        for i in 0..MAX_ERROR_HISTORY + 50 {
+            tracker.record(ErrorEntry::new(
+                ErrorSeverity::Error,
+                "TEST",
+                ErrorCode::InternalError,
+                format!("Error {}", i),
+            ));
+        }
+
+        let summary = tracker.get_summary();
+        assert_eq!(summary.total, MAX_ERROR_HISTORY);
+
+        let recent = tracker.get_recent(MAX_ERROR_HISTORY);
+        assert_eq!(recent.len(), MAX_ERROR_HISTORY);
+        // Most recent error should be the last one we recorded
+        assert!(recent[0].message.starts_with("Error"));
+    }
+
+    #[test]
+    fn test_error_severity_levels() {
+        let severities = [
+            ErrorSeverity::Info,
+            ErrorSeverity::Warning,
+            ErrorSeverity::Error,
+            ErrorSeverity::Critical,
+        ];
+
+        for severity in severities {
+            let entry = ErrorEntry::new(
+                severity,
+                "TEST",
+                ErrorCode::InternalError,
+                "Test".to_string(),
+            );
+            assert_eq!(entry.severity, severity);
+
+            let formatted = entry.format_terminal();
+            assert!(!formatted.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_error_summary_format() {
+        let summary = ErrorSummary {
+            total: 10,
+            errors: 5,
+            warnings: 3,
+            critical: 2,
+        };
+
+        let formatted = summary.format_terminal();
+
+        assert!(formatted.contains("ERROR SUMMARY"));
+        assert!(formatted.contains("Total Errors:   10"));
+        assert!(formatted.contains("Errors:         5"));
+        assert!(formatted.contains("Warnings:       3"));
+        assert!(formatted.contains("Critical:       2"));
+    }
+
+    #[test]
+    fn test_global_error_tracker_accessible() {
+        let tracker = get_error_tracker();
+        assert!(Arc::strong_count(&tracker) >= 1);
+
+        let summary = tracker.get_summary();
+        // Should be able to get summary without issues
+        assert!(summary.total >= 0);
+    }
+
+    #[test]
+    fn test_error_entry_timestamp() {
+        let entry = ErrorEntry::new(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::InternalError,
+            "Test".to_string(),
+        );
+
+        // Timestamp should be set (not zero)
+        assert!(entry.timestamp > 0);
+
+        // Format should produce non-empty string
+        let formatted = format_timestamp(entry.timestamp);
+        assert!(!formatted.is_empty());
+        assert!(formatted.contains(':'));
+    }
+
+    #[test]
+    fn test_record_error_function() {
+        // Clear any existing errors first
+        get_error_tracker().clear();
+
+        record_error(
+            ErrorSeverity::Error,
+            "TEST",
+            ErrorCode::InternalError,
+            "Test error message".to_string(),
+            Some("Test details".to_string()),
+        );
+
+        let summary = get_error_tracker().get_summary();
+        assert_eq!(summary.total, 1);
+        assert_eq!(summary.errors, 1);
+
+        let recent = get_error_tracker().get_recent(1);
+        assert_eq!(recent[0].message, "Test error message");
+        assert_eq!(recent[0].details, Some("Test details".to_string()));
+    }
 }

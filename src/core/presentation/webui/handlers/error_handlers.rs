@@ -2,7 +2,7 @@
 // Error handling WebUI handlers - expose error stats to frontend
 
 use crate::core::error::ErrorCode;
-use crate::core::infrastructure::{error_handler, database::Database};
+use crate::core::infrastructure::{database::Database, error_handler};
 use log::info;
 use std::sync::Arc;
 use webui_rs::webui;
@@ -28,14 +28,14 @@ pub fn setup_error_handlers(window: &mut webui::Window) {
         info!("get_error_stats called from frontend");
         let tracker = error_handler::get_error_tracker();
         let summary = tracker.get_summary();
-        
+
         let response = serde_json::json!({
             "total": summary.total,
             "errors": summary.errors,
             "warnings": summary.warnings,
             "critical": summary.critical,
         });
-        
+
         let js = format!(
             "window.dispatchEvent(new CustomEvent('error_stats_response', {{ detail: {} }}))",
             response
@@ -46,18 +46,22 @@ pub fn setup_error_handlers(window: &mut webui::Window) {
     // Get recent errors
     window.bind("get_recent_errors", |event| {
         info!("get_recent_errors called from frontend");
-        
+
         let element_name = unsafe {
             std::ffi::CStr::from_ptr(event.element)
                 .to_string_lossy()
                 .into_owned()
         };
-        
-        let limit: usize = element_name.split(':').nth(1).and_then(|s| s.parse().ok()).unwrap_or(10);
-        
+
+        let limit: usize = element_name
+            .split(':')
+            .nth(1)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(10);
+
         let tracker = error_handler::get_error_tracker();
         let errors = tracker.get_recent(limit);
-        
+
         let errors_json: Vec<serde_json::Value> = errors.iter().map(|e| {
             serde_json::json!({
                 "id": e.id,
@@ -70,12 +74,12 @@ pub fn setup_error_handlers(window: &mut webui::Window) {
                 "context": e.context.iter().cloned().collect::<std::collections::HashMap<_, _>>(),
             })
         }).collect();
-        
+
         let response = serde_json::json!({
             "errors": errors_json,
             "count": errors.len(),
         });
-        
+
         let js = format!(
             "window.dispatchEvent(new CustomEvent('recent_errors_response', {{ detail: {} }}))",
             response
@@ -88,12 +92,12 @@ pub fn setup_error_handlers(window: &mut webui::Window) {
         info!("clear_error_history called from frontend");
         let tracker = error_handler::get_error_tracker();
         tracker.clear();
-        
+
         let response = serde_json::json!({
             "success": true,
             "message": "Error history cleared",
         });
-        
+
         let js = format!(
             "window.dispatchEvent(new CustomEvent('error_history_cleared', {{ detail: {} }}))",
             response
@@ -108,7 +112,7 @@ pub fn setup_error_handlers(window: &mut webui::Window) {
 pub fn setup_db_monitoring_handlers(window: &mut webui::Window) {
     window.bind("get_db_pool_stats", |_event| {
         info!("get_db_pool_stats called from frontend");
-        
+
         let Some(db) = get_db() else {
             let response = serde_json::json!({
                 "error": "Database not initialized"
@@ -120,21 +124,21 @@ pub fn setup_db_monitoring_handlers(window: &mut webui::Window) {
             webui::Window::from_id(_event.get_window().id).run_js(&js);
             return;
         };
-        
+
         let stats = db.pool_stats();
         let response = serde_json::json!({
             "connections": stats.connections,
             "idle_connections": stats.idle_connections,
             "utilization": stats.utilization(),
         });
-        
+
         let js = format!(
             "window.dispatchEvent(new CustomEvent('db_pool_stats_response', {{ detail: {} }}))",
             response
         );
         webui::Window::from_id(_event.get_window().id).run_js(&js);
     });
-    
+
     info!("Database monitoring handlers set up");
 }
 
@@ -143,13 +147,13 @@ pub fn setup_devtools_handlers(window: &mut webui::Window) {
     // Get backend statistics
     window.bind("get_backend_stats", |_event| {
         info!("get_backend_stats called from frontend");
-        
+
         // Calculate uptime from application start
         // Note: This is a simplified version - in production you'd track start time
         let response = serde_json::json!({
             "uptime": 0, // Would need a global start time tracker
         });
-        
+
         let js = format!(
             "window.dispatchEvent(new CustomEvent('backend_stats_response', {{ detail: {} }}))",
             response
@@ -202,7 +206,7 @@ pub fn setup_devtools_handlers(window: &mut webui::Window) {
     // Create test backend error
     window.bind("create_backend_error", |_event| {
         info!("create_backend_error called from frontend - generating test error");
-        
+
         let test_error = error_handler::ErrorEntry::new(
             error_handler::ErrorSeverity::Warning,
             "DEVTOOLS_TEST",
@@ -210,20 +214,20 @@ pub fn setup_devtools_handlers(window: &mut webui::Window) {
             "This is a test error from DevTools".to_string(),
         )
         .with_details("Triggered via DevTools action".to_string());
-        
+
         error_handler::get_error_tracker().record(test_error);
-        
+
         let response = serde_json::json!({
             "success": true,
             "message": "Test error created",
         });
-        
+
         let js = format!(
             "window.dispatchEvent(new CustomEvent('backend_test_error', {{ detail: {} }}))",
             response
         );
         webui::Window::from_id(_event.get_window().id).run_js(&js);
     });
-    
+
     info!("DevTools backend handlers set up");
 }

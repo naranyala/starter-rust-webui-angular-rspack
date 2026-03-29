@@ -6,7 +6,7 @@ use rusqlite::OptionalExtension;
 
 use super::connection::Database;
 use super::models::Order;
-use crate::core::error::{ErrorCode, ErrorValue, AppError};
+use crate::core::error::{AppError, ErrorCode, ErrorValue};
 
 /// Database operation result type alias
 type DbResult<T> = Result<T, AppError>;
@@ -19,37 +19,39 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, user_id, product_id, quantity, total_price, status, created_at 
-                 FROM orders ORDER BY created_at DESC"
+                 FROM orders ORDER BY created_at DESC",
             )
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare orders query")
                         .with_cause(e.to_string())
-                        .with_context("table", "orders")
+                        .with_context("table", "orders"),
                 )
             })?;
 
-        let orders = stmt.query_map([], |row| {
-            Ok(Order {
-                id: row.get(0)?,
-                user_id: row.get(1)?,
-                product_id: row.get(2)?,
-                quantity: row.get(3)?,
-                total_price: row.get(4)?,
-                status: row.get(5)?,
-                created_at: row.get(6)?,
+        let orders = stmt
+            .query_map([], |row| {
+                Ok(Order {
+                    id: row.get(0)?,
+                    user_id: row.get(1)?,
+                    product_id: row.get(2)?,
+                    quantity: row.get(3)?,
+                    total_price: row.get(4)?,
+                    status: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
             })
-        }).map_err(|e| {
-            AppError::Database(
-                ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to query orders")
-                    .with_cause(e.to_string())
-            )
-        })?;
+            .map_err(|e| {
+                AppError::Database(
+                    ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to query orders")
+                        .with_cause(e.to_string()),
+                )
+            })?;
 
         orders.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to collect orders")
-                    .with_cause(e.to_string())
+                    .with_cause(e.to_string()),
             )
         })
     }
@@ -69,11 +71,12 @@ impl Database {
             conn.query_row(
                 "SELECT COUNT(*) FROM users WHERE id = ?",
                 [user_id],
-                |row| row.get(0)
-            ).map_err(|e| {
+                |row| row.get(0),
+            )
+            .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to validate user")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?
         };
@@ -82,7 +85,7 @@ impl Database {
             return Err(AppError::Validation(
                 ErrorValue::new(ErrorCode::EntityNotFound, "User not found")
                     .with_field("user_id")
-                    .with_context("user_id", user_id.to_string())
+                    .with_context("user_id", user_id.to_string()),
             ));
         }
 
@@ -92,11 +95,12 @@ impl Database {
             conn.query_row(
                 "SELECT COUNT(*) FROM products WHERE id = ?",
                 [product_id],
-                |row| row.get(0)
-            ).map_err(|e| {
+                |row| row.get(0),
+            )
+            .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to validate product")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?
         };
@@ -105,23 +109,29 @@ impl Database {
             return Err(AppError::Validation(
                 ErrorValue::new(ErrorCode::EntityNotFound, "Product not found")
                     .with_field("product_id")
-                    .with_context("product_id", product_id.to_string())
+                    .with_context("product_id", product_id.to_string()),
             ));
         }
 
         // Validate quantity
         if quantity <= 0 {
             return Err(AppError::Validation(
-                ErrorValue::new(ErrorCode::InvalidFieldValue, "Quantity must be greater than 0")
-                    .with_field("quantity")
+                ErrorValue::new(
+                    ErrorCode::InvalidFieldValue,
+                    "Quantity must be greater than 0",
+                )
+                .with_field("quantity"),
             ));
         }
 
         // Validate total_price
         if total_price < 0.0 {
             return Err(AppError::Validation(
-                ErrorValue::new(ErrorCode::InvalidFieldValue, "Total price cannot be negative")
-                    .with_field("total_price")
+                ErrorValue::new(
+                    ErrorCode::InvalidFieldValue,
+                    "Total price cannot be negative",
+                )
+                .with_field("total_price"),
             ));
         }
 
@@ -132,12 +142,20 @@ impl Database {
         conn.execute(
             "INSERT INTO orders (user_id, product_id, quantity, total_price, status, created_at) 
              VALUES (?, ?, ?, ?, ?, ?)",
-            rusqlite::params![user_id, product_id, quantity, total_price, status, created_at],
-        ).map_err(|e| {
+            rusqlite::params![
+                user_id,
+                product_id,
+                quantity,
+                total_price,
+                status,
+                created_at
+            ],
+        )
+        .map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to insert order")
                     .with_cause(e.to_string())
-                    .with_context("operation", "insert_order")
+                    .with_context("operation", "insert_order"),
             )
         })?;
 
@@ -177,17 +195,18 @@ impl Database {
 
         params.push(id.to_string());
 
-        let query = format!(
-            "UPDATE orders SET {} WHERE id = ?",
-            updates.join(", ")
-        );
+        let query = format!("UPDATE orders SET {} WHERE id = ?", updates.join(", "));
 
-        let rows_affected = conn.execute(&query, rusqlite::params_from_iter(params.iter().map(|s| s.as_str())))
+        let rows_affected = conn
+            .execute(
+                &query,
+                rusqlite::params_from_iter(params.iter().map(|s| s.as_str())),
+            )
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to update order")
                         .with_cause(e.to_string())
-                        .with_context("order_id", id.to_string())
+                        .with_context("order_id", id.to_string()),
                 )
             })?;
 
@@ -204,7 +223,7 @@ impl Database {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to delete order")
                         .with_cause(e.to_string())
-                        .with_context("order_id", id.to_string())
+                        .with_context("order_id", id.to_string()),
                 )
             })?;
 
@@ -224,7 +243,7 @@ impl Database {
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare order query")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
@@ -257,8 +276,11 @@ impl Database {
             )
             .map_err(|e| {
                 AppError::Database(
-                    ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare user orders query")
-                        .with_cause(e.to_string())
+                    ErrorValue::new(
+                        ErrorCode::DbQueryFailed,
+                        "Failed to prepare user orders query",
+                    )
+                    .with_cause(e.to_string()),
                 )
             })?;
 
@@ -277,7 +299,7 @@ impl Database {
         orders.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to query user orders")
-                    .with_cause(e.to_string())
+                    .with_cause(e.to_string()),
             )
         })
     }
@@ -294,8 +316,11 @@ impl Database {
             )
             .map_err(|e| {
                 AppError::Database(
-                    ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare status orders query")
-                        .with_cause(e.to_string())
+                    ErrorValue::new(
+                        ErrorCode::DbQueryFailed,
+                        "Failed to prepare status orders query",
+                    )
+                    .with_cause(e.to_string()),
                 )
             })?;
 
@@ -314,7 +339,7 @@ impl Database {
         orders.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to query orders by status")
-                    .with_cause(e.to_string())
+                    .with_cause(e.to_string()),
             )
         })
     }
@@ -331,8 +356,11 @@ impl Database {
             )
             .map_err(|e| {
                 AppError::Database(
-                    ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare product orders query")
-                        .with_cause(e.to_string())
+                    ErrorValue::new(
+                        ErrorCode::DbQueryFailed,
+                        "Failed to prepare product orders query",
+                    )
+                    .with_cause(e.to_string()),
                 )
             })?;
 
@@ -351,7 +379,7 @@ impl Database {
         orders.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to query product orders")
-                    .with_cause(e.to_string())
+                    .with_cause(e.to_string()),
             )
         })
     }
@@ -370,7 +398,7 @@ impl Database {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to update order status")
                         .with_cause(e.to_string())
-                        .with_context("order_id", id.to_string())
+                        .with_context("order_id", id.to_string()),
                 )
             })?;
 
@@ -387,8 +415,11 @@ impl Database {
             .optional()
             .map_err(|e: rusqlite::Error| {
                 AppError::Database(
-                    ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to calculate total revenue")
-                        .with_cause(e.to_string())
+                    ErrorValue::new(
+                        ErrorCode::DbQueryFailed,
+                        "Failed to calculate total revenue",
+                    )
+                    .with_cause(e.to_string()),
                 )
             })?;
 
@@ -405,7 +436,7 @@ impl Database {
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to count orders")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
@@ -416,7 +447,7 @@ impl Database {
     pub fn insert_sample_orders(&self) -> DbResult<()> {
         // Get existing user and product IDs for sample orders
         let conn = self.get_conn()?;
-        
+
         // Get first user ID
         let user_id: Option<i64> = conn
             .query_row("SELECT id FROM users LIMIT 1", [], |row| row.get(0))
@@ -448,7 +479,9 @@ impl Database {
     }
 
     /// Get database statistics
-    pub fn get_database_stats(&self) -> DbResult<crate::core::infrastructure::database::models::DatabaseStats> {
+    pub fn get_database_stats(
+        &self,
+    ) -> DbResult<crate::core::infrastructure::database::models::DatabaseStats> {
         let conn = self.get_conn()?;
 
         let users_count: i64 = conn
@@ -456,7 +489,7 @@ impl Database {
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to count users")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
@@ -465,7 +498,7 @@ impl Database {
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to count products")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
@@ -474,28 +507,32 @@ impl Database {
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to count orders")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
         let total_revenue: f64 = conn
-            .query_row("SELECT SUM(total_price) FROM orders", [], |row| row.get::<_, Option<f64>>(0))
+            .query_row("SELECT SUM(total_price) FROM orders", [], |row| {
+                row.get::<_, Option<f64>>(0)
+            })
             .optional()
             .map_err(|e: rusqlite::Error| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to calculate revenue")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?
             .flatten()
             .unwrap_or(0.0);
 
-        Ok(crate::core::infrastructure::database::models::DatabaseStats {
-            users_count,
-            products_count,
-            orders_count,
-            total_revenue,
-        })
+        Ok(
+            crate::core::infrastructure::database::models::DatabaseStats {
+                users_count,
+                products_count,
+                orders_count,
+                total_revenue,
+            },
+        )
     }
 }
 
@@ -506,13 +543,13 @@ mod tests {
     fn create_test_db() -> Database {
         let db = Database::new(":memory:").expect("Failed to create database");
         db.init().expect("Failed to init database");
-        
+
         // Insert sample user and product for order tests
         db.insert_user("Test User", "test@example.com", "User", "Active")
             .expect("Failed to insert user");
         db.insert_product("Test Product", "A test product", 99.99, "Test", 10)
             .expect("Failed to insert product");
-        
+
         db
     }
 
@@ -520,12 +557,14 @@ mod tests {
     fn test_insert_and_get_order() {
         let db = create_test_db();
 
-        let order_id = db.insert_order(1, 1, 2, 199.98, "Pending")
+        let order_id = db
+            .insert_order(1, 1, 2, 199.98, "Pending")
             .expect("Failed to insert order");
 
         assert!(order_id > 0);
 
-        let order = db.get_order_by_id(order_id)
+        let order = db
+            .get_order_by_id(order_id)
             .expect("Failed to get order")
             .expect("Order not found");
 
@@ -539,19 +578,23 @@ mod tests {
     fn test_update_order() {
         let db = create_test_db();
 
-        let order_id = db.insert_order(1, 1, 1, 99.99, "Pending")
+        let order_id = db
+            .insert_order(1, 1, 1, 99.99, "Pending")
             .expect("Failed to insert order");
 
-        let rows = db.update_order(
-            order_id,
-            Some(3),
-            Some(299.97),
-            Some("Completed".to_string()),
-        ).expect("Failed to update order");
+        let rows = db
+            .update_order(
+                order_id,
+                Some(3),
+                Some(299.97),
+                Some("Completed".to_string()),
+            )
+            .expect("Failed to update order");
 
         assert_eq!(rows, 1);
 
-        let order = db.get_order_by_id(order_id)
+        let order = db
+            .get_order_by_id(order_id)
             .expect("Failed to get order")
             .expect("Order not found");
 
@@ -564,7 +607,8 @@ mod tests {
     fn test_delete_order() {
         let db = create_test_db();
 
-        let order_id = db.insert_order(1, 1, 1, 99.99, "Pending")
+        let order_id = db
+            .insert_order(1, 1, 1, 99.99, "Pending")
             .expect("Failed to insert order");
 
         let rows = db.delete_order(order_id).expect("Failed to delete order");

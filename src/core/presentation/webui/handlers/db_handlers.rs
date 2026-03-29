@@ -1,5 +1,5 @@
-use crate::core::error::{AppError, ErrorValue, ErrorCode};
-use crate::core::infrastructure::database::models::{ApiResponse, ErrorData, DatabaseStats};
+use crate::core::error::{AppError, ErrorCode, ErrorValue};
+use crate::core::infrastructure::database::models::{ApiResponse, DatabaseStats, ErrorData};
 use crate::core::infrastructure::database::Database;
 use crate::core::infrastructure::error_handler;
 use log::{error, info};
@@ -22,11 +22,7 @@ fn get_db() -> Option<Arc<Database>> {
 }
 
 /// Send a success response to the frontend using unified ApiResponse format
-fn send_success_response<T: serde::Serialize>(
-    window: webui::Window,
-    event_name: &str,
-    data: T,
-) {
+fn send_success_response<T: serde::Serialize>(window: webui::Window, event_name: &str, data: T) {
     let response = ApiResponse::success(data);
     dispatch_event(window, event_name, &response);
 }
@@ -47,11 +43,7 @@ fn err_to_error_data(err: &AppError) -> ErrorData {
 }
 
 /// Helper to dispatch a custom event to the frontend
-fn dispatch_event<T: serde::Serialize>(
-    window: webui::Window,
-    event_name: &str,
-    detail: &T,
-) {
+fn dispatch_event<T: serde::Serialize>(window: webui::Window, event_name: &str, detail: &T) {
     let js = format!(
         "window.dispatchEvent(new CustomEvent('{}', {{ detail: {} }}))",
         event_name,
@@ -92,7 +84,7 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "db_response", &err);
             return;
@@ -108,7 +100,7 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "db_response", &err);
             return;
@@ -135,13 +127,17 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "user_create_response", &err);
             return;
         };
 
-        handle_db_result(window, "user_create_response", db.insert_user(name, email, role, status));
+        handle_db_result(
+            window,
+            "user_create_response",
+            db.insert_user(name, email, role, status),
+        );
     });
 
     window.bind("createUser", |event| {
@@ -162,13 +158,17 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "user_create_response", &err);
             return;
         };
 
-        handle_db_result(window, "user_create_response", db.insert_user(name, email, role, status));
+        handle_db_result(
+            window,
+            "user_create_response",
+            db.insert_user(name, email, role, status),
+        );
     });
 
     window.bind("update_user", |event| {
@@ -181,22 +181,46 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts: Vec<&str> = element_name.split(':').collect();
-        let id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
-        let name = if parts.len() > 2 { Some(parts[2].to_string()) } else { None };
-        let email = if parts.len() > 3 { Some(parts[3].to_string()) } else { None };
-        let role = if parts.len() > 4 { Some(parts[4].to_string()) } else { None };
-        let status = if parts.len() > 5 { Some(parts[5].to_string()) } else { None };
+        let id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
+        let name = if parts.len() > 2 {
+            Some(parts[2].to_string())
+        } else {
+            None
+        };
+        let email = if parts.len() > 3 {
+            Some(parts[3].to_string())
+        } else {
+            None
+        };
+        let role = if parts.len() > 4 {
+            Some(parts[4].to_string())
+        } else {
+            None
+        };
+        let status = if parts.len() > 5 {
+            Some(parts[5].to_string())
+        } else {
+            None
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "user_update_response", &err);
             return;
         };
 
-        handle_db_result(window, "user_update_response", db.update_user(id, name, email, role, status));
+        handle_db_result(
+            window,
+            "user_update_response",
+            db.update_user(id, name, email, role, status),
+        );
     });
 
     window.bind("updateUser", |event| {
@@ -209,22 +233,46 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts = parse_params(&element_name);
-        let id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
-        let name = if parts.len() > 2 { Some(parts[2].to_string()) } else { None };
-        let email = if parts.len() > 3 { Some(parts[3].to_string()) } else { None };
-        let role = if parts.len() > 4 { Some(parts[4].to_string()) } else { None };
-        let status = if parts.len() > 5 { Some(parts[5].to_string()) } else { None };
+        let id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
+        let name = if parts.len() > 2 {
+            Some(parts[2].to_string())
+        } else {
+            None
+        };
+        let email = if parts.len() > 3 {
+            Some(parts[3].to_string())
+        } else {
+            None
+        };
+        let role = if parts.len() > 4 {
+            Some(parts[4].to_string())
+        } else {
+            None
+        };
+        let status = if parts.len() > 5 {
+            Some(parts[5].to_string())
+        } else {
+            None
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "user_update_response", &err);
             return;
         };
 
-        handle_db_result(window, "user_update_response", db.update_user(id, name, email, role, status));
+        handle_db_result(
+            window,
+            "user_update_response",
+            db.update_user(id, name, email, role, status),
+        );
     });
 
     window.bind("delete_user", |event| {
@@ -237,12 +285,16 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts: Vec<&str> = element_name.split(':').collect();
-        let id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
+        let id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "user_delete_response", &err);
             return;
@@ -261,12 +313,16 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts = parse_params(&element_name);
-        let id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
+        let id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "user_delete_response", &err);
             return;
@@ -283,7 +339,7 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "products_response", &err);
             return;
@@ -304,20 +360,32 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let parts = parse_params(&element_name);
         let name = if parts.len() > 1 { parts[1] } else { "" };
         let description = if parts.len() > 2 { parts[2] } else { "" };
-        let price: f64 = if parts.len() > 3 { parts[3].parse().unwrap_or(0.0) } else { 0.0 };
+        let price: f64 = if parts.len() > 3 {
+            parts[3].parse().unwrap_or(0.0)
+        } else {
+            0.0
+        };
         let category = if parts.len() > 4 { parts[4] } else { "General" };
-        let stock: i64 = if parts.len() > 5 { parts[5].parse().unwrap_or(0) } else { 0 };
+        let stock: i64 = if parts.len() > 5 {
+            parts[5].parse().unwrap_or(0)
+        } else {
+            0
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "product_create_response", &err);
             return;
         };
 
-        handle_db_result(window, "product_create_response", db.insert_product(name, description, price, category, stock));
+        handle_db_result(
+            window,
+            "product_create_response",
+            db.insert_product(name, description, price, category, stock),
+        );
     });
 
     window.bind("updateProduct", |event| {
@@ -330,23 +398,51 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts = parse_params(&element_name);
-        let id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
-        let name = if parts.len() > 2 { Some(parts[2].to_string()) } else { None };
-        let description = if parts.len() > 3 { Some(parts[3].to_string()) } else { None };
-        let price: Option<f64> = if parts.len() > 4 { parts[4].parse().ok() } else { None };
-        let category = if parts.len() > 5 { Some(parts[5].to_string()) } else { None };
-        let stock: Option<i64> = if parts.len() > 6 { parts[6].parse().ok() } else { None };
+        let id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
+        let name = if parts.len() > 2 {
+            Some(parts[2].to_string())
+        } else {
+            None
+        };
+        let description = if parts.len() > 3 {
+            Some(parts[3].to_string())
+        } else {
+            None
+        };
+        let price: Option<f64> = if parts.len() > 4 {
+            parts[4].parse().ok()
+        } else {
+            None
+        };
+        let category = if parts.len() > 5 {
+            Some(parts[5].to_string())
+        } else {
+            None
+        };
+        let stock: Option<i64> = if parts.len() > 6 {
+            parts[6].parse().ok()
+        } else {
+            None
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "product_update_response", &err);
             return;
         };
 
-        handle_db_result(window, "product_update_response", db.update_product(id, name, description, price, category, stock));
+        handle_db_result(
+            window,
+            "product_update_response",
+            db.update_product(id, name, description, price, category, stock),
+        );
     });
 
     window.bind("deleteProduct", |event| {
@@ -359,12 +455,16 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts = parse_params(&element_name);
-        let id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
+        let id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "product_delete_response", &err);
             return;
@@ -381,7 +481,7 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "orders_response", &err);
             return;
@@ -400,22 +500,42 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts = parse_params(&element_name);
-        let user_id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
-        let product_id: i64 = if parts.len() > 2 { parts[2].parse().unwrap_or(0) } else { 0 };
-        let quantity: i64 = if parts.len() > 3 { parts[3].parse().unwrap_or(1) } else { 1 };
-        let total_price: f64 = if parts.len() > 4 { parts[4].parse().unwrap_or(0.0) } else { 0.0 };
+        let user_id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
+        let product_id: i64 = if parts.len() > 2 {
+            parts[2].parse().unwrap_or(0)
+        } else {
+            0
+        };
+        let quantity: i64 = if parts.len() > 3 {
+            parts[3].parse().unwrap_or(1)
+        } else {
+            1
+        };
+        let total_price: f64 = if parts.len() > 4 {
+            parts[4].parse().unwrap_or(0.0)
+        } else {
+            0.0
+        };
         let status = if parts.len() > 5 { parts[5] } else { "Pending" };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "order_create_response", &err);
             return;
         };
 
-        handle_db_result(window, "order_create_response", db.insert_order(user_id, product_id, quantity, total_price, status));
+        handle_db_result(
+            window,
+            "order_create_response",
+            db.insert_order(user_id, product_id, quantity, total_price, status),
+        );
     });
 
     window.bind("updateOrder", |event| {
@@ -428,21 +548,41 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts = parse_params(&element_name);
-        let id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
-        let quantity: Option<i64> = if parts.len() > 2 { parts[2].parse().ok() } else { None };
-        let total_price: Option<f64> = if parts.len() > 3 { parts[3].parse().ok() } else { None };
-        let status = if parts.len() > 4 { Some(parts[4].to_string()) } else { None };
+        let id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
+        let quantity: Option<i64> = if parts.len() > 2 {
+            parts[2].parse().ok()
+        } else {
+            None
+        };
+        let total_price: Option<f64> = if parts.len() > 3 {
+            parts[3].parse().ok()
+        } else {
+            None
+        };
+        let status = if parts.len() > 4 {
+            Some(parts[4].to_string())
+        } else {
+            None
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "order_update_response", &err);
             return;
         };
 
-        handle_db_result(window, "order_update_response", db.update_order(id, quantity, total_price, status));
+        handle_db_result(
+            window,
+            "order_update_response",
+            db.update_order(id, quantity, total_price, status),
+        );
     });
 
     window.bind("deleteOrder", |event| {
@@ -455,12 +595,16 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let window = event.get_window();
 
         let parts = parse_params(&element_name);
-        let id: i64 = if parts.len() > 1 { parts[1].parse().unwrap_or(0) } else { 0 };
+        let id: i64 = if parts.len() > 1 {
+            parts[1].parse().unwrap_or(0)
+        } else {
+            0
+        };
 
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "order_delete_response", &err);
             return;
@@ -477,7 +621,7 @@ pub fn setup_db_handlers(window: &mut webui::Window) {
         let Some(db) = get_db() else {
             let err = AppError::DependencyInjection(
                 ErrorValue::new(ErrorCode::InternalError, "Database not initialized")
-                    .with_cause("DI container missing database instance")
+                    .with_cause("DI container missing database instance"),
             );
             send_error_response(window, "stats_response", &err);
             return;

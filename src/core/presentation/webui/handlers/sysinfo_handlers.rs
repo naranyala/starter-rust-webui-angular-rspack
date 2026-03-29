@@ -125,7 +125,7 @@ fn get_disk_info() -> serde_json::Value {
 
     if let Ok(output) = Command::new("df")
         .args(["-h", "-P", "-x", "tmpfs", "-x", "devtmpfs"])
-        .output() 
+        .output()
     {
         if let Ok(stdout) = String::from_utf8(output.stdout) {
             for line in stdout.lines().skip(1) {

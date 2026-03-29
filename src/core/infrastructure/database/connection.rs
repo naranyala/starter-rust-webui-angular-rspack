@@ -7,7 +7,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, Result as SqliteResult, ToSql};
 use std::time::Duration;
 
-use crate::core::error::{AppResult, ErrorValue, ErrorCode, AppError};
+use crate::core::error::{AppError, AppResult, ErrorCode, ErrorValue};
 
 use super::models::QueryResult;
 
@@ -66,10 +66,10 @@ impl Database {
                 AppError::Database(
                     ErrorValue::new(
                         ErrorCode::DbConnectionFailed,
-                        "Failed to create database connection pool"
+                        "Failed to create database connection pool",
                     )
                     .with_cause(e.to_string())
-                    .with_context("db_path", db_path.to_string())
+                    .with_context("db_path", db_path.to_string()),
                 )
             })?;
 
@@ -82,9 +82,12 @@ impl Database {
     pub fn get_conn(&self) -> AppResult<PooledConnection<SqliteConnectionManager>> {
         self.pool.get().map_err(|e| {
             AppError::Database(
-                ErrorValue::new(ErrorCode::DbConnectionFailed, "Failed to get database connection")
-                    .with_cause(e.to_string())
-                    .with_context("operation", "get_conn")
+                ErrorValue::new(
+                    ErrorCode::DbConnectionFailed,
+                    "Failed to get database connection",
+                )
+                .with_cause(e.to_string())
+                .with_context("operation", "get_conn"),
             )
         })
     }
@@ -167,7 +170,7 @@ impl Database {
     /// Execute a raw SELECT query and return results as JSON
     pub fn query(&self, sql: &str, params: &[&dyn ToSql]) -> AppResult<QueryResult> {
         let conn = self.get_conn()?;
-        
+
         let mut stmt = conn.prepare(sql)?;
         let column_names: Vec<String> = stmt
             .column_names()
@@ -211,9 +214,9 @@ impl Database {
         F: FnOnce(&Connection) -> AppResult<T>,
     {
         let conn = self.get_conn()?;
-        
+
         conn.execute("BEGIN", [])?;
-        
+
         match f(&conn) {
             Ok(result) => {
                 conn.execute("COMMIT", [])?;
@@ -283,15 +286,15 @@ mod tests {
     fn test_database_with_pool() {
         let db = Database::new(":memory:").expect("Failed to create in-memory database");
         assert!(db.init().is_ok());
-        
+
         // Test connection pooling
         let conn1 = db.get_conn().expect("Failed to get connection");
         let conn2 = db.get_conn().expect("Failed to get second connection");
-        
+
         // Both connections should be usable
         assert!(conn1.is_valid().is_ok());
         assert!(conn2.is_valid().is_ok());
-        
+
         // Check pool stats
         let stats = db.pool_stats();
         assert!(stats.connections >= 2);
@@ -325,15 +328,18 @@ mod tests {
                 ["Test User", "test@example.com", "Admin", "Active"],
             )?;
             // Force an error
-            Err(AppError::Database(
-                ErrorValue::new(ErrorCode::DbQueryFailed, "Forced error")
-            ))
+            Err(AppError::Database(ErrorValue::new(
+                ErrorCode::DbQueryFailed,
+                "Forced error",
+            )))
         });
 
         assert!(result.is_err());
-        
+
         // Verify no data was inserted
-        let count: i64 = db.get_conn().unwrap()
+        let count: i64 = db
+            .get_conn()
+            .unwrap()
             .query_row("SELECT COUNT(*) FROM users", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 0);

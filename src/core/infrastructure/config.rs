@@ -192,11 +192,17 @@ impl AppConfig {
     }
 
     pub fn get_transport(&self) -> &str {
-        self.communication.transport.as_deref().unwrap_or("webview_ffi")
+        self.communication
+            .transport
+            .as_deref()
+            .unwrap_or("webview_ffi")
     }
 
     pub fn get_serialization(&self) -> &str {
-        self.communication.serialization.as_deref().unwrap_or("json")
+        self.communication
+            .serialization
+            .as_deref()
+            .unwrap_or("json")
     }
 
     pub fn is_dark_mode(&self) -> bool {

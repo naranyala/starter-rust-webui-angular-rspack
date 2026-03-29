@@ -1,26 +1,20 @@
 use log::{error, info, warn};
-use std::sync::Arc;
-use std::net::TcpListener;
 use std::fs;
+use std::net::TcpListener;
 use std::path::PathBuf;
+use std::sync::Arc;
 use webui_rs::webui;
 use webui_rs::webui::bindgen::webui_set_port;
 
 // MVVM: Core - Domain, Application, Infrastructure, Presentation
 mod core;
 use core::{
-    infrastructure::{config::AppConfig, database::Database, logging, di, error_handler},
     error::ErrorCode,
+    infrastructure::{config::AppConfig, database::Database, di, error_handler, logging},
     presentation,
 };
 
-// Shared utilities
-mod utils;
-
 include!(concat!(env!("OUT_DIR"), "/embedded_frontend.rs"));
-
-mod utils_demo;
-use utils_demo::run_utilities_demo;
 
 #[allow(unused_variables)]
 fn main() {
@@ -88,7 +82,7 @@ fn main() {
     // Get communication settings from config
     let transport = config.get_transport();
     let serialization = config.get_serialization();
-    
+
     // Display backend-frontend communication configuration
     info!("═══════════════════════════════════════════════════════");
     info!("  BACKEND-FRONTEND COMMUNICATION");
@@ -98,27 +92,70 @@ fn main() {
     info!("  ┌──────────────────┬────────────────────────────────┐");
     info!("  │ Option           │ Description                    │");
     info!("  ├──────────────────┼────────────────────────────────┤");
-    let webview_active = if transport == "webview_ffi" { "✓ [ACTIVE]" } else { "  " };
-    info!("  │ webview_ffi      │ Native WebView binding{}    │", webview_active);
-    let http_active = if transport == "http_rest" { "✓ [ACTIVE]" } else { "  " };
-    info!("  │ http_rest        │ HTTP/REST API{}             │", http_active);
-    let ws_active = if transport == "websocket" { "✓ [ACTIVE]" } else { "  " };
-    info!("  │ websocket        │ WebSocket connection{}       │", ws_active);
+    let webview_active = if transport == "webview_ffi" {
+        "✓ [ACTIVE]"
+    } else {
+        "  "
+    };
+    info!(
+        "  │ webview_ffi      │ Native WebView binding{}    │",
+        webview_active
+    );
+    let http_active = if transport == "http_rest" {
+        "✓ [ACTIVE]"
+    } else {
+        "  "
+    };
+    info!(
+        "  │ http_rest        │ HTTP/REST API{}             │",
+        http_active
+    );
+    let ws_active = if transport == "websocket" {
+        "✓ [ACTIVE]"
+    } else {
+        "  "
+    };
+    info!(
+        "  │ websocket        │ WebSocket connection{}       │",
+        ws_active
+    );
     info!("  └──────────────────┴────────────────────────────────┘");
     info!("");
     info!("  SERIALIZATION FORMAT:");
     info!("  ┌──────────────┬────────┬────────┬─────────────────────┐");
     info!("  │ Format       │ Size   │ Speed  │ Description         │");
     info!("  ├──────────────┼────────┼────────┼─────────────────────┤");
-    let json_active = if serialization == "json" { "✓ [ACTIVE]" } else { "   " };
-    info!("  │ JSON         │ 1.0x   │ 1.0x   │ Human readable{}    │", json_active);
-    let msgpack_active = if serialization == "messagepack" { "✓ [ACTIVE]" } else { "   " };
-    info!("  │ MessagePack  │ ~0.7x  │ ~1.5x  │ Binary, compact{}   │", msgpack_active);
-    let cbor_active = if serialization == "cbor" { "✓ [ACTIVE]" } else { "   " };
-    info!("  │ CBOR         │ ~0.6x  │ ~1.6x  │ RFC 7049{}          │", cbor_active);
+    let json_active = if serialization == "json" {
+        "✓ [ACTIVE]"
+    } else {
+        "   "
+    };
+    info!(
+        "  │ JSON         │ 1.0x   │ 1.0x   │ Human readable{}    │",
+        json_active
+    );
+    let msgpack_active = if serialization == "messagepack" {
+        "✓ [ACTIVE]"
+    } else {
+        "   "
+    };
+    info!(
+        "  │ MessagePack  │ ~0.7x  │ ~1.5x  │ Binary, compact{}   │",
+        msgpack_active
+    );
+    let cbor_active = if serialization == "cbor" {
+        "✓ [ACTIVE]"
+    } else {
+        "   "
+    };
+    info!(
+        "  │ CBOR         │ ~0.6x  │ ~1.6x  │ RFC 7049{}          │",
+        cbor_active
+    );
     info!("  └──────────────┴────────┴────────┴─────────────────────┘");
     info!("");
-    info!("  SELECTED: {} + {}", 
+    info!(
+        "  SELECTED: {} + {}",
         match transport {
             "webview_ffi" => "WebView FFI (Native Binding)",
             "http_rest" => "HTTP/REST",
@@ -136,19 +173,23 @@ fn main() {
     info!("  DATA FLOW:");
     match transport {
         "webview_ffi" => {
-            info!("    Frontend JS ──[{}]──> window.bind() ──> Rust Backend", 
-                serialization.to_uppercase());
-            info!("    Rust Backend ─[{}]──> window.run_js() ──> Frontend JS", 
-                serialization.to_uppercase());
-        },
+            info!(
+                "    Frontend JS ──[{}]──> window.bind() ──> Rust Backend",
+                serialization.to_uppercase()
+            );
+            info!(
+                "    Rust Backend ─[{}]──> window.run_js() ──> Frontend JS",
+                serialization.to_uppercase()
+            );
+        }
         "http_rest" => {
             info!("    Frontend JS ──[HTTP/JSON]──> REST API ──> Rust Backend");
             info!("    Rust Backend ─[HTTP/JSON]──> REST API ──> Frontend JS");
-        },
+        }
         "websocket" => {
             info!("    Frontend JS ──[WS/JSON]──> WebSocket Server ──> Rust Backend");
             info!("    Rust Backend ─[WS/JSON]──> WebSocket Server ──> Frontend JS");
-        },
+        }
         _ => {}
     }
     info!("═══════════════════════════════════════════════════════");
@@ -190,8 +231,10 @@ fn main() {
             }
             // Log pool stats
             let stats = db.pool_stats();
-            info!("Database pool stats: connections={}, idle={}", 
-                  stats.connections, stats.idle_connections);
+            info!(
+                "Database pool stats: connections={}, idle={}",
+                stats.connections, stats.idle_connections
+            );
             Arc::new(db)
         }
         Err(e) => {
@@ -201,18 +244,19 @@ fn main() {
         }
     };
 
-    // Register database in the container
-    if let Err(e) = container.register_singleton(Arc::clone(&db)) {
-        eprintln!("Failed to register database in DI container: {}", e);
+    // Register database and repository services in the container
+    if let Err(e) = di::register_infrastructure_services(Arc::clone(&db)) {
+        eprintln!(
+            "Failed to register infrastructure services in DI container: {}",
+            e
+        );
         return;
     }
+    info!("Infrastructure services registered in DI container (Database, repositories)");
 
     // Initialize database handlers with the database instance
     presentation::db_handlers::init_database(Arc::clone(&db));
     presentation::error_handlers::init_database_monitoring(Arc::clone(&db));
-
-    // Demonstrate utility usage
-    run_utilities_demo();
 
     // Create a new window
     let mut my_window = webui::Window::new();
@@ -258,7 +302,7 @@ fn main() {
             return;
         }
     };
-    
+
     // Set root folder for WebUI to serve static files
     let root_folder = dist_dir.to_str().unwrap_or("dist");
     info!("Setting WebUI root folder to: {}", root_folder);
@@ -266,7 +310,7 @@ fn main() {
     unsafe {
         webui_rs::webui::bindgen::webui_set_root_folder(my_window.id, c_string.as_ptr());
     }
-    
+
     info!("Loading application UI from {}", index_path.display());
     // When root folder is set, WebUI should load by route, not absolute file path.
     my_window.show("index.html");
@@ -314,7 +358,11 @@ fn resolve_frontend_dist() -> Option<(PathBuf, PathBuf)> {
     }
 
     candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("dist"));
-    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("dist").join("browser"));
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("dist")
+            .join("browser"),
+    );
 
     if let Ok(cwd) = std::env::current_dir() {
         candidates.push(cwd.join("dist"));
@@ -327,7 +375,10 @@ fn resolve_frontend_dist() -> Option<(PathBuf, PathBuf)> {
             info!("Resolved frontend dist directory: {}", dist_dir.display());
             return Some((dist_dir, index_path));
         }
-        warn!("Frontend dist candidate missing index.html: {}", dist_dir.display());
+        warn!(
+            "Frontend dist candidate missing index.html: {}",
+            dist_dir.display()
+        );
     }
 
     if let Some((dist_dir, index_path)) = materialize_embedded_frontend_dist() {
@@ -365,7 +416,11 @@ fn materialize_embedded_frontend_dist() -> Option<(PathBuf, PathBuf)> {
 
     for (path, contents) in writes {
         if let Err(e) = fs::write(&path, contents) {
-            warn!("Failed to write embedded frontend file {}: {}", path.display(), e);
+            warn!(
+                "Failed to write embedded frontend file {}: {}",
+                path.display(),
+                e
+            );
             return None;
         }
     }

@@ -7,9 +7,9 @@
 // 3. Serializable for cross-boundary communication
 // 4. Composable using Result<T, E> patterns
 
-use std::fmt;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
+use std::fmt;
 
 /// Error codes for programmatic handling and frontend-backend protocol
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,31 +21,31 @@ pub enum ErrorCode {
     DbConstraintViolation = 1002,
     DbNotFound = 1003,
     DbAlreadyExists = 1004,
-    
+
     // Configuration errors (2000-2999)
     ConfigNotFound = 2000,
     ConfigInvalid = 2001,
     ConfigMissingField = 2002,
-    
+
     // Serialization errors (3000-3999)
     SerializationFailed = 3000,
     DeserializationFailed = 3001,
     InvalidFormat = 3002,
-    
+
     // Validation errors (4000-4999)
     ValidationFailed = 4000,
     MissingRequiredField = 4001,
     InvalidFieldValue = 4002,
-    
+
     // Not found errors (5000-5999)
     ResourceNotFound = 5000,
     UserNotFound = 5001,
     EntityNotFound = 5002,
-    
+
     // System errors (6000-6999)
     LockPoisoned = 6000,
     InternalError = 6999,
-    
+
     // Custom/unknown
     Unknown = 9999,
 }
@@ -246,9 +246,7 @@ pub trait ToAppResult<T> {
 impl<T> ToAppResult<T> for Option<T> {
     fn to_app_error(self, context: &str) -> AppResult<T> {
         self.ok_or_else(|| {
-            AppError::NotFound(
-                ErrorValue::new(ErrorCode::ResourceNotFound, context)
-            )
+            AppError::NotFound(ErrorValue::new(ErrorCode::ResourceNotFound, context))
         })
     }
 }
@@ -258,7 +256,7 @@ impl<T, E: fmt::Display> ToAppResult<T> for Result<T, E> {
         self.map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, format!("{}: {}", context, e))
-                    .with_cause("Database operation failed")
+                    .with_cause("Database operation failed"),
             )
         })
     }
@@ -271,33 +269,39 @@ pub mod errors {
     #[allow(dead_code)]
     pub fn db_not_found(entity: &str, id: impl fmt::Display) -> AppError {
         AppError::NotFound(
-            ErrorValue::new(ErrorCode::DbNotFound, format!("{} not found: {}", entity, id))
-                .with_field("id")
-                .with_context("entity", entity)
+            ErrorValue::new(
+                ErrorCode::DbNotFound,
+                format!("{} not found: {}", entity, id),
+            )
+            .with_field("id")
+            .with_context("entity", entity),
         )
     }
 
     #[allow(dead_code)]
     pub fn validation_failed(field: &str, message: &str) -> AppError {
         AppError::Validation(
-            ErrorValue::new(ErrorCode::ValidationFailed, message.to_string())
-                .with_field(field)
+            ErrorValue::new(ErrorCode::ValidationFailed, message.to_string()).with_field(field),
         )
     }
 
     #[allow(dead_code)]
     pub fn not_found(resource: &str, id: impl fmt::Display) -> AppError {
         AppError::NotFound(
-            ErrorValue::new(ErrorCode::ResourceNotFound, format!("{} not found: {}", resource, id))
-                .with_context("resource", resource)
+            ErrorValue::new(
+                ErrorCode::ResourceNotFound,
+                format!("{} not found: {}", resource, id),
+            )
+            .with_context("resource", resource),
         )
     }
 
     #[allow(dead_code)]
     pub fn internal(message: &str) -> AppError {
-        AppError::LockPoisoned(
-            ErrorValue::new(ErrorCode::InternalError, message.to_string())
-        )
+        AppError::LockPoisoned(ErrorValue::new(
+            ErrorCode::InternalError,
+            message.to_string(),
+        ))
     }
 }
 
@@ -310,7 +314,7 @@ mod tests {
         let error = ErrorValue::new(ErrorCode::DbNotFound, "User not found")
             .with_field("user_id")
             .with_context("table", "users");
-        
+
         assert_eq!(error.code, ErrorCode::DbNotFound);
         assert_eq!(error.message, "User not found");
         assert_eq!(error.field, Some("user_id".to_string()));
@@ -320,7 +324,7 @@ mod tests {
     fn test_error_value_serialization() {
         let error = ErrorValue::new(ErrorCode::ValidationFailed, "Invalid email");
         let json = error.to_response();
-        
+
         assert!(json.get("code").is_some());
         assert!(json.get("message").is_some());
     }
@@ -329,7 +333,7 @@ mod tests {
     fn test_error_helpers() {
         let err = errors::db_not_found("User", 123);
         assert!(matches!(err, AppError::NotFound(_)));
-        
+
         let err = errors::validation_failed("email", "Must be valid email");
         assert!(matches!(err, AppError::Validation(_)));
     }

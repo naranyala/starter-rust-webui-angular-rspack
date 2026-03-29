@@ -261,9 +261,11 @@ export class DevToolsComponent implements OnInit {
 
   private checkConnection(): void {
     const stats = this.comm.getStats();
-    this.connected.set(stats.activeSubscriptions > 0 || stats.totalMessages > 0);
+    // New stats structure from facade: { bridge, broadcast, queueLength, stateVersion }
+    const bridgeStats = stats.bridge;
+    this.connected.set(bridgeStats.totalCalls > 0 || stats.broadcast.count > 0);
     this.stats.set({
-      eventsSent: stats.totalMessages,
+      eventsSent: bridgeStats.totalCalls,
       eventsReceived: 0,
     });
   }

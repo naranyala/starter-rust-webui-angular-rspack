@@ -6,7 +6,7 @@ use rusqlite::{params, OptionalExtension};
 
 use super::connection::Database;
 use super::models::User;
-use crate::core::error::{ErrorCode, ErrorValue, AppError};
+use crate::core::error::{AppError, ErrorCode, ErrorValue};
 
 /// Database operation result type alias
 type DbResult<T> = Result<T, AppError>;
@@ -22,75 +22,75 @@ impl Database {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare users query")
                         .with_cause(e.to_string())
-                        .with_context("table", "users")
+                        .with_context("table", "users"),
                 )
             })?;
 
-        let users = stmt.query_map([], |row| {
-            Ok(User {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                email: row.get(2)?,
-                role: row.get(3)?,
-                status: row.get(4)?,
-                created_at: row.get(5)?,
+        let users = stmt
+            .query_map([], |row| {
+                Ok(User {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    email: row.get(2)?,
+                    role: row.get(3)?,
+                    status: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
             })
-        }).map_err(|e| {
-            AppError::Database(
-                ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to query users")
-                    .with_cause(e.to_string())
-            )
-        })?;
+            .map_err(|e| {
+                AppError::Database(
+                    ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to query users")
+                        .with_cause(e.to_string()),
+                )
+            })?;
 
         users.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to collect users")
-                    .with_cause(e.to_string())
+                    .with_cause(e.to_string()),
             )
         })
     }
 
     /// Insert a new user
-    pub fn insert_user(
-        &self,
-        name: &str,
-        email: &str,
-        role: &str,
-        status: &str,
-    ) -> DbResult<i64> {
+    pub fn insert_user(&self, name: &str, email: &str, role: &str, status: &str) -> DbResult<i64> {
         if name.is_empty() {
             return Err(AppError::Validation(
                 ErrorValue::new(ErrorCode::MissingRequiredField, "Name is required")
-                    .with_field("name")
+                    .with_field("name"),
             ));
         }
 
         if email.is_empty() {
             return Err(AppError::Validation(
                 ErrorValue::new(ErrorCode::MissingRequiredField, "Email is required")
-                    .with_field("email")
+                    .with_field("email"),
             ));
         }
 
         let conn = self.get_conn()?;
-        
+
         let created_at = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
         conn.execute(
             "INSERT INTO users (name, email, role, status, created_at) VALUES (?, ?, ?, ?, ?)",
             params![name, email, role, status, created_at],
-        ).map_err(|e| {
+        )
+        .map_err(|e| {
             if e.to_string().contains("UNIQUE constraint failed") {
                 AppError::Database(
-                    ErrorValue::new(ErrorCode::DbAlreadyExists, "User with this email already exists")
-                        .with_field("email")
-                        .with_context("email", email.to_string())
+                    ErrorValue::new(
+                        ErrorCode::DbAlreadyExists,
+                        "User with this email already exists",
+                    )
+                    .with_field("email")
+                    .with_context("email", email.to_string()),
                 )
             } else {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to insert user")
                         .with_cause(e.to_string())
-                        .with_context("operation", "insert_user")
+                        .with_context("operation", "insert_user"),
                 )
             }
         })?;
@@ -136,16 +136,13 @@ impl Database {
 
         params.push(&id);
 
-        let query = format!(
-            "UPDATE users SET {} WHERE id = ?",
-            updates.join(", ")
-        );
+        let query = format!("UPDATE users SET {} WHERE id = ?", updates.join(", "));
 
         let rows_affected = conn.execute(&query, params.as_slice()).map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to update user")
                     .with_cause(e.to_string())
-                    .with_context("user_id", id.to_string())
+                    .with_context("user_id", id.to_string()),
             )
         })?;
 
@@ -162,7 +159,7 @@ impl Database {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to delete user")
                         .with_cause(e.to_string())
-                        .with_context("user_id", id.to_string())
+                        .with_context("user_id", id.to_string()),
                 )
             })?;
 
@@ -175,13 +172,11 @@ impl Database {
         let conn = self.get_conn()?;
 
         let mut stmt = conn
-            .prepare(
-                "SELECT id, name, email, role, status, created_at FROM users WHERE id = ?",
-            )
+            .prepare("SELECT id, name, email, role, status, created_at FROM users WHERE id = ?")
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare user query")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
@@ -206,13 +201,11 @@ impl Database {
         let conn = self.get_conn()?;
 
         let mut stmt = conn
-            .prepare(
-                "SELECT id, name, email, role, status, created_at FROM users WHERE email = ?",
-            )
+            .prepare("SELECT id, name, email, role, status, created_at FROM users WHERE email = ?")
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare user query")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
@@ -260,7 +253,7 @@ impl Database {
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to count users")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
@@ -284,7 +277,7 @@ impl Database {
             .map_err(|e| {
                 AppError::Database(
                     ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare search query")
-                        .with_cause(e.to_string())
+                        .with_cause(e.to_string()),
                 )
             })?;
 
@@ -302,7 +295,7 @@ impl Database {
         users.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| {
             AppError::Database(
                 ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to search users")
-                    .with_cause(e.to_string())
+                    .with_cause(e.to_string()),
             )
         })
     }
@@ -322,12 +315,14 @@ mod tests {
     fn test_insert_and_get_user() {
         let db = create_test_db();
 
-        let user_id = db.insert_user("Test User", "test@example.com", "User", "Active")
+        let user_id = db
+            .insert_user("Test User", "test@example.com", "User", "Active")
             .expect("Failed to insert user");
 
         assert!(user_id > 0);
 
-        let user = db.get_user_by_id(user_id)
+        let user = db
+            .get_user_by_id(user_id)
             .expect("Failed to get user")
             .expect("User not found");
 
@@ -344,7 +339,7 @@ mod tests {
 
         let result = db.insert_user("User 2", "dup@example.com", "User", "Active");
         assert!(result.is_err());
-        
+
         match result.unwrap_err() {
             AppError::Database(err) => {
                 assert_eq!(err.code, ErrorCode::DbAlreadyExists);
@@ -357,20 +352,24 @@ mod tests {
     fn test_update_user() {
         let db = create_test_db();
 
-        let user_id = db.insert_user("Original Name", "update@example.com", "User", "Active")
+        let user_id = db
+            .insert_user("Original Name", "update@example.com", "User", "Active")
             .expect("Failed to insert user");
 
-        let rows = db.update_user(
-            user_id,
-            Some("Updated Name".to_string()),
-            None,
-            Some("Admin".to_string()),
-            None,
-        ).expect("Failed to update user");
+        let rows = db
+            .update_user(
+                user_id,
+                Some("Updated Name".to_string()),
+                None,
+                Some("Admin".to_string()),
+                None,
+            )
+            .expect("Failed to update user");
 
         assert_eq!(rows, 1);
 
-        let user = db.get_user_by_id(user_id)
+        let user = db
+            .get_user_by_id(user_id)
             .expect("Failed to get user")
             .expect("User not found");
 
@@ -382,7 +381,8 @@ mod tests {
     fn test_delete_user() {
         let db = create_test_db();
 
-        let user_id = db.insert_user("Delete Me", "delete@example.com", "User", "Active")
+        let user_id = db
+            .insert_user("Delete Me", "delete@example.com", "User", "Active")
             .expect("Failed to insert user");
 
         let rows = db.delete_user(user_id).expect("Failed to delete user");
