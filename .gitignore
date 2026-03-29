@@ -1,34 +1,136 @@
 
-# Rust build output
+# =============================================================================
+# Rust Build Output
+# =============================================================================
 target/
-dist/
-thirdparty/
+**/target/
 
-# Frontend dependencies and build
-frontend/node_modules
-frontend/dist
-frontend/.angular
-frontend/.rspack
+# =============================================================================
+# Frontend Build Output and Dependencies
+# =============================================================================
+# Node modules
+node_modules/
+**/node_modules/
 
-*/node_modules/*
-*/dist/*
-*/.angular/*
+thirdparty/*
 
-frontend-legacy/node_modules
-frontend-legacy/dist
-frontend-legacy/.angular
+# Angular build output
+frontend/dist/
+frontend/.angular/
+frontend/.rspack/
 
-# Application runtime files
+# Legacy frontend (if exists)
+frontend-legacy/
+
+# =============================================================================
+# Application Runtime Files (NEVER commit)
+# =============================================================================
+# Databases
 *.db
-*.log
+*.sqlite
+*.sqlite3
+app.db
+data.db
 
-# IDE and editor files
-.idea/
+# Log files
+*.log
+logs/
+log/
+
+# Configuration that may contain secrets
+.env
+.env.local
+.env.*.local
+*.local.toml
+
+# =============================================================================
+# IDE and Editor Files
+# =============================================================================
+# Visual Studio Code
 .vscode/
+*.code-workspace
+
+# IntelliJ IDEA / WebStorm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
 *.swp
 *.swo
 *~
+*.vim
 
-# OS files
+# Emacs
+*~
+\#*\#
+.\#*
+
+# =============================================================================
+# OS Files
+# =============================================================================
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+Trash-*/
+
+# =============================================================================
+# Temporary Files
+# =============================================================================
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+
+# =============================================================================
+# Build and Cache Files
+# =============================================================================
+# Rust
+Cargo.lock.bak
+
+# Bun/npm
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build caches
+**/.cache/
+**/tsconfig.tsbuildinfo
+
+# =============================================================================
+# Test and Coverage
+# =============================================================================
+coverage/
+.nyc_output/
+*.lcov
+
+# =============================================================================
+# Documentation Build
+# =============================================================================
+docs/_build/
+site/
+
+# =============================================================================
+# Secrets and Credentials (CRITICAL - Never Commit)
+# =============================================================================
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/

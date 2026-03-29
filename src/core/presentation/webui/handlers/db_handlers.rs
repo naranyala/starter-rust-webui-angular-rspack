@@ -1,5 +1,5 @@
 use crate::core::error::{AppError, ErrorCode, ErrorValue};
-use crate::core::infrastructure::database::models::{ApiResponse, DatabaseStats, ErrorData};
+use crate::core::infrastructure::database::models::{ApiResponse, ErrorData};
 use crate::core::infrastructure::database::Database;
 use crate::core::infrastructure::error_handler;
 use log::{error, info};
@@ -11,13 +11,25 @@ lazy_static::lazy_static! {
 }
 
 pub fn init_database(db: Arc<Database>) {
-    let mut instance = DB_INSTANCE.lock().unwrap();
+    let mut instance = match DB_INSTANCE.lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            error!("Failed to acquire DB_INSTANCE lock: {}", e);
+            return;
+        }
+    };
     *instance = Some(db);
     info!("Database handlers initialized");
 }
 
 fn get_db() -> Option<Arc<Database>> {
-    let instance = DB_INSTANCE.lock().unwrap();
+    let instance = match DB_INSTANCE.lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            error!("Failed to acquire DB_INSTANCE lock: {}", e);
+            return None;
+        }
+    };
     instance.clone()
 }
 

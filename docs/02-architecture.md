@@ -1,786 +1,558 @@
-# Architecture
+# Architecture Guide
 
-## System Overview
+This document explains the architectural patterns and design decisions behind the Rust WebUI + Angular application.
 
-The application implements a **hybrid architecture** combining:
-- **Clean Architecture** (Rust backend) for separation of concerns
-- **MVVM Pattern** (Angular frontend) for reactive UI
-- **Event-Driven Communication** for decoupled components
+---
+
+## Table of Contents
+
+1. [System Architecture](#system-architecture)
+2. [Clean Architecture](#clean-architecture)
+3. [MVVM Pattern](#mvvm-pattern)
+4. [Repository Pattern](#repository-pattern)
+5. [Dependency Injection](#dependency-injection)
+6. [Event-Driven Design](#event-driven-design)
+7. [Frontend-Backend Communication](#frontend-backend-communication)
+
+---
+
+## System Architecture
+
+### High-Level Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     FRONTEND (Angular)                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │  Views   │  │ ViewModels│  │  Models  │  │  Core    │   │
-│  │          │←→│          │←→│          │←→│ Services │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                            ↕ WebUI Bindings (JSON/FFI)
-┌─────────────────────────────────────────────────────────────┐
-│                      BACKEND (Rust)                         │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │              Presentation Layer (WebUI)              │  │
-│  ├──────────────────────────────────────────────────────┤  │
-│  │              Application Layer (Handlers)            │  │
-│  ├──────────────────────────────────────────────────────┤  │
-│  │                Domain Layer (Entities)               │  │
-│  ├──────────────────────────────────────────────────────┤  │
-│  │           Infrastructure Layer (DB, Logging)         │  │
-│  └──────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         Desktop Window                           │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                    Angular Frontend                        │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │  │
+│  │  │  Views      │  │  ViewModels │  │  Core Services  │   │  │
+│  │  │  (UI)       │↔️│  (State)    │↔️│  (Logic)        │   │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────────┘   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                              ↕ WebUI Bridge (FFI)                │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                     Rust Backend                           │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │  │
+│  │  │ Presentation│  │ Application │  │  Infrastructure │   │  │
+│  │  │  (Handlers) │↔️│  (Use Cases)│↔️│  (DB, Logging)  │   │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────────┘   │  │
+│  │                              ↕                            │  │
+│  │  ┌─────────────────────────────────────────────────────┐ │  │
+│  │  │              Domain Layer (Entities & Traits)        │ │  │
+│  │  └─────────────────────────────────────────────────────┘ │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                              ↕                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                     SQLite Database                        │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Backend Architecture (Rust)
+## Clean Architecture
 
 ### Layer Structure
 
+Our backend follows **Clean Architecture** principles with four distinct layers:
+
 ```
 src/core/
-├── domain/           # Business entities (pure Rust structs)
-├── application/      # Use cases and handlers
-├── infrastructure/   # External concerns (DB, logging, config)
-└── presentation/     # WebUI integration
+├── domain/           # Enterprise Business Rules
+│   ├── entities/     # Business objects (User, Product, Order)
+│   └── traits/       # Repository contracts
+│
+├── application/      # Application Business Rules
+│   └── handlers/     # Use case implementations
+│
+├── infrastructure/   # Frameworks & Drivers
+│   ├── database/     # SQLite implementation
+│   ├── logging/      # Logging implementation
+│   ├── di.rs         # Dependency Injection
+│   └── error_handler.rs
+│
+└── presentation/     # Interface Adapters
+    └── webui/
+        └── handlers/ # WebUI event handlers
 ```
 
-### Domain Layer
+### Dependency Rule
 
-**Purpose**: Encapsulate business logic and entities
+```
+Domain ← Application ← Infrastructure ← Presentation
+   ↑          ↑             ↑               ↑
+   └──────────┴─────────────┴───────────────┘
+         (Dependencies point inward)
+```
 
-**Location**: `src/core/domain/`
+**Key Principle:** Inner layers know nothing about outer layers.
 
-**Characteristics**:
-- Zero dependencies on other layers
-- Pure Rust structs and enums
-- Business rules and validation
-- Domain events
+### Example: Creating a User
 
 ```rust
-// Example: User entity
+// 1. Domain Layer - Entity
+// src/core/domain/entities/mod.rs
 pub struct User {
     pub id: i64,
+    pub name: String,
     pub email: String,
-    pub role: Role,
-    pub status: UserStatus,
-    pub created_at: DateTime,
+    pub role: String,
+    pub status: String,
+    pub created_at: String,
 }
 
-pub enum Role {
-    Admin,
-    User,
-    Guest,
+// 2. Domain Layer - Repository Trait
+// src/core/domain/traits/mod.rs
+pub trait UserRepository: Send + Sync {
+    fn get_all(&self) -> AppResult<Vec<User>>;
+    fn get_by_id(&self, id: i64) -> AppResult<Option<User>>;
+    fn create(&self, name: &str, email: &str, role: &str, status: &str) -> AppResult<i64>;
+    fn update(&self, id: i64, name: Option<&str>, ...) -> AppResult<usize>;
+    fn delete(&self, id: i64) -> AppResult<usize>;
 }
 
-pub enum UserStatus {
-    Active,
-    Inactive,
-    Suspended,
+// 3. Infrastructure Layer - Implementation
+// src/core/infrastructure/database/repositories.rs
+impl UserRepository for Database {
+    fn create(&self, name: &str, email: &str, role: &str, status: &str) -> AppResult<i64> {
+        self.insert_user(name, email, role, status)
+    }
+    // ... other methods
+}
+
+// 4. Presentation Layer - Handler
+// src/core/presentation/webui/handlers/db_handlers.rs
+window.bind("create_user", |event| {
+    // Parse input, call repository, send response
+    let db = get_db().unwrap();
+    let user_id = db.create(name, email, role, status)?;
+    send_success_response(window, "user_create_response", user_id);
+});
+```
+
+---
+
+## MVVM Pattern
+
+### Frontend Architecture
+
+The Angular frontend follows the **MVVM (Model-View-ViewModel)** pattern:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  View (Component)                                        │
+│  - Template (HTML)                                       │
+│  - Styles (CSS)                                          │
+│  - Binds to ViewModel signals                            │
+└─────────────────────────────────────────────────────────┘
+                         ↕
+┌─────────────────────────────────────────────────────────┐
+│  ViewModel (Signals + Logic)                             │
+│  - State signals                                         │
+│  - Computed signals                                      │
+│  - Action methods                                        │
+└─────────────────────────────────────────────────────────┘
+                         ↕
+┌─────────────────────────────────────────────────────────┐
+│  Model (Data)                                            │
+│  - Interfaces                                            │
+│  - Type definitions                                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Example: Dashboard Component
+
+```typescript
+// VIEW MODEL
+// src/views/dashboard/dashboard.component.ts
+export class DashboardComponent {
+  // State signals
+  activeView = signal<string>('README');
+  isLoading = signal(false);
+  users = signal<User[]>([]);
+  stats = signal<DashboardStats>({ totalUsers: 0, ... });
+
+  // Computed signals
+  hasUsers = computed(() => this.users().length > 0);
+
+  // Actions
+  async loadData(): Promise<void> {
+    this.isLoading.set(true);
+    const users = await this.api.callOrThrow<User[]>('getUsers');
+    this.users.set(users);
+    this.isLoading.set(false);
+  }
+}
+
+// VIEW
+// Template binds to ViewModel
+@Component({
+  template: `
+    @if (isLoading()) {
+      <div>Loading...</div>
+    } @else if (hasUsers()) {
+      <div>{{ users().length }} users found</div>
+    }
+    <button (click)="loadData()">Refresh</button>
+  `
+})
+```
+
+---
+
+## Repository Pattern
+
+### Why Repository Pattern?
+
+The Repository pattern provides:
+
+1. **Abstraction** - Domain layer doesn't know about database
+2. **Testability** - Repositories can be mocked
+3. **Swappability** - Change database without changing domain logic
+4. **Single Responsibility** - Data access logic in one place
+
+### Implementation
+
+```rust
+// 1. Define the contract (Domain Layer)
+// src/core/domain/traits/mod.rs
+pub trait UserRepository: Send + Sync {
+    fn get_all(&self) -> AppResult<Vec<User>>;
+    fn get_by_id(&self, id: i64) -> AppResult<Option<User>>;
+    fn create(&self, name: &str, email: &str, role: &str, status: &str) -> AppResult<i64>;
+}
+
+// 2. Implement the contract (Infrastructure Layer)
+// src/core/infrastructure/database/repositories.rs
+impl UserRepository for Database {
+    fn get_all(&self) -> AppResult<Vec<User>> {
+        // Convert infrastructure models to domain entities
+        let models = self.get_all_users()?;
+        Ok(models.into_iter().map(|m| User {
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            // ... mapping
+        }).collect())
+    }
+
+    fn get_by_id(&self, id: i64) -> AppResult<Option<User>> {
+        Ok(self.get_user_by_id(id)?.map(|m| User {
+            id: m.id,
+            name: m.name,
+            // ... mapping
+        }))
+    }
+
+    fn create(&self, name: &str, email: &str, role: &str, status: &str) -> AppResult<i64> {
+        self.insert_user(name, email, role, status)
+    }
+}
+
+// 3. Use through abstraction (Application/Presentation Layer)
+// Can inject UserRepository trait object
+container.register_trait(Arc::clone(&db) as Arc<dyn UserRepository>)?;
+```
+
+### Testing with Mocks
+
+```rust
+// Test with mock repository
+struct MockUserRepository;
+
+impl UserRepository for MockUserRepository {
+    fn get_all(&self) -> AppResult<Vec<User>> {
+        Ok(vec![User { /* test data */ }])
+    }
+    // ... other methods
+}
+
+#[test]
+fn test_user_service() {
+    let mock_repo = MockUserRepository;
+    let service = UserService::new(mock_repo);
+    // Test without database!
 }
 ```
 
-### Application Layer
+---
 
-**Purpose**: Implement use cases and orchestrate domain objects
+## Dependency Injection
 
-**Location**: `src/core/application/`
-
-**Characteristics**:
-- Defines application boundaries
-- Coordinates domain entities
-- Handles input validation
-- Returns `Result<T, AppError>`
+### Container Implementation
 
 ```rust
-// Example: Create User Handler
-pub struct CreateUserHandler {
-    user_repo: Arc<UserRepository>,
-    event_bus: Arc<EventBus>,
-}
-
-impl CreateUserHandler {
-    pub fn execute(&self, dto: CreateUserDto) -> AppResult<User> {
-        // Validate
-        if !dto.email.is_valid() {
-            return Err(AppError::Validation(/* ... */));
-        }
-        
-        // Check uniqueness
-        if self.user_repo.exists(&dto.email)? {
-            return Err(AppError::Database(/* ... */));
-        }
-        
-        // Create user
-        let user = User::new(dto.email, dto.role);
-        let saved = self.user_repo.save(user)?;
-        
-        // Publish event
-        self.event_bus.publish("user.created", &saved);
-        
-        Ok(saved)
-    }
-}
-```
-
-### Infrastructure Layer
-
-**Purpose**: Handle external concerns (database, logging, configuration)
-
-**Location**: `src/core/infrastructure/`
-
-**Components**:
-
-#### Database Module
-
-```rust
-// Connection pooling with r2d2
-pub struct Database {
-    pool: Pool<SqliteConnectionManager>,
-    config: DbPoolConfig,
-}
-
-impl Database {
-    pub fn new(db_path: &str) -> AppResult<Self> {
-        let manager = SqliteConnectionManager::file(db_path);
-        let pool = Pool::builder()
-            .max_size(10)
-            .min_idle(Some(2))
-            .build(manager)?;
-        Ok(Self { pool, config: DbPoolConfig::default() })
-    }
-    
-    pub fn get_conn(&self) -> AppResult<PooledConnection> {
-        self.pool.get().map_err(/* ... */)
-    }
-}
-```
-
-**Features**:
-- Connection pooling (no mutex bottlenecks)
-- Automatic connection recycling
-- Pool statistics monitoring
-- Transaction support
-
-#### Logging Module
-
-```rust
-// Multi-sink logging
-pub struct Logger {
-    file_path: Mutex<PathBuf>,
-    log_to_console: bool,
-    formatter: LogFormatter,
-}
-
-impl log::Log for Logger {
-    fn log(&self, record: &Record) {
-        // Format as JSON
-        let json_msg = self.formatter.format_json(record);
-        
-        // Write to console
-        if self.log_to_console {
-            println!("{}", self.formatter.format_console(record));
-        }
-        
-        // Write to file
-        self.write_to_file(&json_msg);
-    }
-}
-```
-
-**Features**:
-- JSON file logging
-- Colored console output
-- Log rotation
-- Configurable log levels
-
-#### Error Handler Module
-
-```rust
-// Enhanced error tracking
-pub struct ErrorTracker {
-    errors: Mutex<VecDeque<ErrorEntry>>,
-    sequence: Mutex<u64>,
-}
-
-impl ErrorTracker {
-    pub fn record(&self, entry: ErrorEntry) {
-        // Store in history
-        // Output to terminal with colors
-        // Update statistics
-    }
-}
-
-// Panic hook integration
-pub fn init_error_handling() {
-    std::panic::set_hook(Box::new(|panic_info| {
-        // Extract panic info
-        // Record as critical error
-        // Print stack trace
-    }));
-}
-```
-
-**Features**:
-- Panic hook with stack traces
-- Error history (last 100 errors)
-- Color-coded terminal output
-- Error statistics
-
-#### Dependency Injection
-
-```rust
-// Simple DI container
+// src/core/infrastructure/di.rs
 pub struct Container {
     services: Mutex<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>,
 }
 
 impl Container {
-    pub fn register<T>(&self, instance: T) -> AppResult<()> {
-        // Type-safe registration
+    pub fn register<T: 'static + Send + Sync>(&self, instance: T) -> AppResult<()> {
+        // Register by type ID
     }
-    
-    pub fn resolve<T>(&self) -> AppResult<T> {
-        // Type-safe resolution
+
+    pub fn resolve<T: 'static + Clone>(&self) -> AppResult<T> {
+        // Resolve by type ID
+    }
+
+    pub fn register_trait<T: 'static + Send + Sync>(&self, instance: T) -> AppResult<()> {
+        // Register trait object
     }
 }
 ```
 
-### Presentation Layer
+### Registration Flow
 
-**Purpose**: Handle WebUI integration and event dispatching
-
-**Location**: `src/core/presentation/webui/`
-
-**Structure**:
 ```rust
-// Handler registration
-pub fn setup_db_handlers(window: &mut webui::Window) {
-    window.bind("get_users", |event| {
-        let db = get_db().unwrap();
-        let users = db.get_all_users().unwrap();
-        
-        let response = json!({
-            "success": true,
-            "data": users
-        });
-        
-        dispatch_event(window, "db_response", &response);
-    });
+// src/main.rs
+fn main() {
+    // 1. Initialize container
+    di::init_container()?;
+
+    // 2. Create database
+    let db = Database::new(db_path)?;
+
+    // 3. Register infrastructure services
+    di::register_infrastructure_services(Arc::clone(&db))?;
+    // Registers:
+    // - Database (concrete type)
+    // - UserRepository (trait)
+    // - ProductRepository (trait)
+    // - OrderRepository (trait)
 }
 ```
 
-**Handler Types**:
-- `db_handlers.rs` - Database operations
-- `sysinfo_handlers.rs` - System information
-- `logging_handlers.rs` - Log retrieval
-- `event_bus_handlers.rs` - Event bus operations
-- `window_state_handler.rs` - Window management
-- `error_handlers.rs` - Error tracking
-- `devtools_handlers.rs` - DevTools support
+### Angular DI
+
+```typescript
+// Modern inject() pattern (Angular 19+)
+@Injectable({ providedIn: 'root' })
+export class ApiService {
+  // Inject dependencies
+  private readonly storage = inject(StorageService);
+
+  // State
+  private readonly loading = signal(false);
+  readonly isLoading = this.loading.asReadonly();
+
+  constructor() {
+    // Clean constructor
+  }
+}
+```
 
 ---
 
-## Frontend Architecture (Angular)
+## Event-Driven Design
 
-### MVVM Pattern Structure
-
-```
-frontend/src/
-├── views/           # Components (View layer)
-├── viewmodels/      # State + Logic (ViewModel layer)
-├── models/          # Types (Model layer)
-└── core/            # Services (Infrastructure)
-```
-
-### Models Layer
-
-**Purpose**: Define data structures and type contracts
-
-**Location**: `src/models/`
+### EventBus Service
 
 ```typescript
-// Example: User model
-export interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: 'Admin' | 'User' | 'Guest';
-  status: 'Active' | 'Inactive';
-  created_at: string;
-}
-
-// Error types
-export interface ErrorValue {
-  code: ErrorCode;
-  message: string;
-  details?: string;
-  field?: string;
-  context?: Record<string, string>;
-}
-
-export enum ErrorCode {
-  DbConnectionFailed = 'DB_CONNECTION_FAILED',
-  ValidationFailed = 'VALIDATION_FAILED',
-  ResourceNotFound = 'RESOURCE_NOT_FOUND',
-  InternalError = 'INTERNAL_ERROR',
-}
-```
-
-### ViewModels Layer
-
-**Purpose**: Business logic and state management
-
-**Location**: `src/viewmodels/`
-
-#### Event Bus ViewModel
-
-```typescript
+// src/app/services/event-bus.service.ts
 @Injectable({ providedIn: 'root' })
-export class EventBusViewModel<Events extends object> {
-  private subscriptions = new Map<keyof Events, Map<number, Handler>>();
-  private history: BusEvent[] = [];
-  
-  subscribe<K extends keyof Events>(
-    name: K,
-    handler: Handler<Events[K]>,
-    options?: SubscribeOptions
-  ): () => void {
-    // Register subscription
-    // Return unsubscribe function
+export class EventBusService {
+  private subscribers = new Map<string, Set<EventHandler>>();
+  private eventSubject = new Subject<{ topic: string; data: any }>();
+
+  // Subscribe to events
+  subscribe(topic: string, handler: EventHandler): Subscription {
+    // Add handler to map
+    // Subscribe on backend too
   }
-  
-  publish<K extends keyof Events>(
-    name: K,
-    payload: Events[K],
-    options?: PublishOptions
-  ): void {
-    // Create event
-    // Add to history
-    // Dispatch to subscribers
+
+  // Publish events
+  publish(topic: string, data: any): void {
+    // Publish to backend
+    // Emit locally
   }
-  
-  stats(): EventBusStats {
-    return {
-      listeners: this.countListeners(),
-      historySize: this.history.length,
-    };
-  }
-}
-```
 
-#### Logging ViewModel
-
-```typescript
-export class Logger {
-  constructor(
-    private backend: LoggingViewModel,
-    private namespace: string
-  ) {}
-  
-  info(message: string, context: LogContext = {}): void {
-    this.log('info', message, context);
-  }
-  
-  error(message: string, context: LogContext, error?: unknown): void {
-    this.log('error', message, context, error);
-  }
-  
-  private log(level: LogLevel, message: string, context: LogContext): void {
-    // Format entry
-    // Emit to backend
-    // Console output
-  }
-}
-```
-
-#### Error Dashboard ViewModel
-
-```typescript
-@Injectable({ providedIn: 'root' })
-export class ErrorDashboardViewModel {
-  private readonly state = signal<ErrorDashboardState>({
-    stats: { total: 0, errors: 0, warnings: 0, critical: 0 },
-    recentErrors: [],
-    isLoading: false,
-  });
-  
-  readonly stats = computed(() => this.state().stats);
-  readonly recentErrors = computed(() => this.state().recentErrors);
-  
-  requestStats(): void {
-    window.get_error_stats('error_stats');
-  }
-  
-  clearErrorHistory(): void {
-    window.clear_error_history('clear_error_history');
-  }
-}
-```
-
-### Views Layer
-
-**Purpose**: UI presentation and user interaction
-
-**Location**: `src/views/`
-
-#### Root Component
-
-```typescript
-@Component({
-  selector: 'app-root',
-  standalone: true,
-  imports: [CommonModule, ErrorModalComponent, DevtoolsComponent],
-  templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css'],
-})
-export class AppComponent implements OnInit, OnDestroy {
-  // Inject services
-  readonly globalErrorService = inject(GlobalErrorService);
-  private readonly winboxService = inject(WinBoxService);
-  private readonly logger = getLogger('app.component');
-  
-  // Signals
-  searchQuery = signal('');
-  windowEntries = signal<WindowEntry[]>([]);
-  bottomCollapsed = signal(true);
-  
-  // Computed signals
-  filteredCards = computed(() => {
-    const query = this.searchQuery().toLowerCase();
-    return this.cards.filter(card => 
-      card.title.toLowerCase().includes(query)
-    );
-  });
-  
-  ngOnInit(): void {
-    // Initialize components
-  }
-}
-```
-
-#### DevTools Component
-
-```typescript
-@Component({
-  selector: 'app-devtools',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
-    <div class="devtools">
-      <!-- 5 Tabs: Backend, Frontend, Events, Environment, Actions -->
-    </div>
-  `,
-  styles: [`/* Dark theme styles */`],
-})
-export class DevtoolsComponent implements OnInit, OnDestroy {
-  activeTab = signal<'backend' | 'frontend' | 'events' | 'environment' | 'actions'>('backend');
-  
-  backendStats = signal<BackendStats>({ /* ... */ });
-  frontendStats = signal<FrontendStats>({ /* ... */ });
-  
-  refreshAll(): void {
-    this.refreshBackendStats();
-    this.refreshFrontendStats();
-  }
-}
-```
-
-### Core Services Layer
-
-**Purpose**: Shared infrastructure and base classes
-
-**Location**: `src/core/`
-
-#### Global Error Handler
-
-```typescript
-export class GlobalErrorHandler implements ErrorHandler {
-  private readonly injector = inject(Injector);
-  
-  handleError(error: unknown): void {
-    const errorService = this.injector.get(GlobalErrorService);
-    const errorValue = this.extractErrorValue(error);
-    
-    errorService.report(errorValue, {
-      source: 'angular',
-      title: this.extractTitle(error),
+  // Observe as Observable
+  observe<T>(topic: string): Observable<T> {
+    return new Observable<T>(observer => {
+      const handler = (data: T) => observer.next(data);
+      const subscription = this.subscribe(topic, handler);
+      return () => subscription.unsubscribe();
     });
   }
 }
 ```
 
-#### Error Interceptor
+### Backend Event Bus
 
-```typescript
-export class ErrorInterceptor {
-  private stats: ErrorStats = { total: 0, bySource: new Map() };
-  
-  interceptWebUICall<T>(
-    operation: string,
-    fn: () => T
-  ): T | null {
-    try {
-      return fn();
-    } catch (error) {
-      this.handleError(error, { source: 'webui', operation });
-      return null;
+```rust
+// src/core/infrastructure/event_bus.rs
+pub struct EventBus {
+    handlers: Mutex<HashMap<String, Vec<Box<dyn Fn(&str) + Send + Sync>>>>,
+}
+
+impl EventBus {
+    pub fn subscribe<F>(&self, event: &str, handler: F)
+    where
+        F: Fn(&str) + Send + Sync + 'static,
+    {
+        // Register handler
     }
-  }
-  
-  handleError(error: unknown, context: ErrorContext): void {
-    // Update statistics
-    // Log to console with colors
-    // Report to error service
-  }
+
+    pub fn publish(&self, event: &str, payload: &str) {
+        // Notify all handlers
+    }
 }
 ```
 
 ---
 
-## Communication Architecture
+## Frontend-Backend Communication
 
-### WebUI Bindings
+### Communication Channels
 
-**Flow**: Frontend → Backend
+| Channel | Purpose | Pattern | Service |
+|---------|---------|---------|---------|
+| WebUI Bridge | RPC calls | Request/Response | `WebUiBridgeService` |
+| Event Bus | Pub/Sub | Publish/Subscribe | `EventBusService` |
+| Shared State | Global state | State Management | `SharedStateService` |
+| Message Queue | Async messaging | Queue | `MessageQueueService` |
+| Broadcast | Cross-tab | One-to-Many | `BroadcastService` |
 
-```javascript
-// Frontend: Call backend function
-window.get_users();
+### WebUI Bridge (Primary Channel)
 
-// Backend: Handler receives event
+```typescript
+// Frontend - Call backend function
+const result = await this.bridge.callOrThrow<User[]>('getUsers');
+
+// Backend - Handler
 window.bind("get_users", |event| {
+    let db = get_db().unwrap();
     let users = db.get_all_users()?;
-    send_response(window, "db_response", &users);
-});
-
-// Frontend: Listen for response
-window.addEventListener('db_response', (event) => {
-    const users = event.detail.data;
-    // Update UI
+    send_response(window, "db_response", users);
 });
 ```
 
-### Event Bus
-
-**Flow**: Component → Event Bus → Subscribers
+### Shared State
 
 ```typescript
-// Publish event
-eventBus.publish('user:created', { id: 123, name: 'Alice' });
+// Frontend - Set state
+await this.state.setState('currentUser', user);
 
-// Subscribe to event
-const unsubscribe = eventBus.subscribe('user:created', (payload) => {
-    console.log('User created:', payload);
+// Frontend - Get state
+const user = this.state.getState<User>('currentUser');
+
+// Frontend - Subscribe to changes
+this.state.subscribeState((key, value) => {
+  console.log(`${key} changed to`, value);
 });
 
-// Unsubscribe when done
-unsubscribe();
-```
-
-### Error Propagation
-
-```
-User Action
-    ↓
-Component Method
-    ↓
-ViewModel Call
-    ↓
-Error Interceptor ← Records statistics
-    ↓
-Backend Handler
-    ↓
-Error Handler ← Records to tracker
-    ↓
-Terminal Output ← Color-coded error message
-    ↓
-Frontend Event ← Dispatched via WebUI
-    ↓
-Error Service ← Updates signals
-    ↓
-Error Modal ← Displays to user
+// Backend - Sync state
+window.bind("setSharedState", |event| {
+    // Update shared state
+    // Broadcast to all clients
+});
 ```
 
 ---
 
-## Data Flow Examples
+## Error Handling Architecture
 
-### Example 1: Create User
-
-```
-┌─────────┐     ┌──────────┐     ┌─────────┐     ┌─────────┐
-│  View   │     │ ViewModel│     │ Backend │     │  Database│
-└────┬────┘     └────┬─────┘     └────┬────┘     └────┬────┘
-     │               │                │               │
-     │ create_user() │                │               │
-     │──────────────>│                │               │
-     │               │                │               │
-     │               │ window.create_user()            │
-     │               │───────────────>│               │
-     │               │                │               │
-     │               │                │ INSERT INTO   │
-     │               │                │──────────────>│
-     │               │                │               │
-     │               │                │ Result<User>  │
-     │               │                │<──────────────│
-     │               │                │               │
-     │               │ dispatch_event('user_created') │
-     │               │<───────────────│               │
-     │               │                │               │
-     │ update UI     │                │               │
-     │<──────────────│                │               │
-     │               │                │               │
-```
-
-### Example 2: Error Handling
+### Backend Error Flow
 
 ```
-┌─────────┐     ┌──────────┐     ┌─────────┐     ┌──────────┐
-│  View   │     │Interceptor│     │ Backend │     │ Terminal │
-└────┬────┘     └────┬─────┘     └────┬────┘     └────┬─────┘
-     │               │                │               │
-     │ Action        │                │               │
-     │──────────────>│                │               │
-     │               │                │               │
-     │               │ try { fn() }   │               │
-     │               │ catch (error)  │               │
-     │               │                │               │
-     │               │ handleError()  │               │
-     │               │───────────────>│               │
-     │               │                │               │
-     │               │                │ record_error()│
-     │               │                │──────────────>│
-     │               │                │               │
-     │               │                │ [ERROR #1]    │
-     │               │                │ DB_QUERY_FAILED│
-     │               │                │ Message: ...  │
-     │               │                │               │
-     │               │ console.error()│               │
-     │               │<───────────────│               │
-     │               │ [RED] Error   │               │
-     │               │               │               │
+┌─────────────────────────────────────────────────────────┐
+│  Error Occurs                                            │
+└─────────────────────────────────────────────────────────┘
+         ↓
+┌─────────────────────────────────────────────────────────┐
+│  Create AppError with ErrorCode                          │
+│  - Database, Validation, Internal, etc.                  │
+└─────────────────────────────────────────────────────────┘
+         ↓
+┌─────────────────────────────────────────────────────────┐
+│  Convert to ErrorValue                                   │
+│  - Code, Message, Details, Context                       │
+└─────────────────────────────────────────────────────────┘
+         ↓
+┌─────────────────────────────────────────────────────────┐
+│  Record in ErrorTracker                                  │
+│  - Log to terminal                                       │
+│  - Store in history                                      │
+└─────────────────────────────────────────────────────────┘
+         ↓
+┌─────────────────────────────────────────────────────────┐
+│  Send to Frontend as ApiResponse<T>                      │
+│  { success: false, error: ErrorValue }                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Frontend Error Flow
+
+```typescript
+// Service layer
+async getUsers(): Promise<User[]> {
+  try {
+    return await this.api.callOrThrow('getUsers');
+  } catch (error) {
+    // Log error
+    this.logger.error('Failed to get users', error);
+    // Track error
+    this.errorTracking.capture(error);
+    // Rethrow or handle
+    throw error;
+  }
+}
+
+// Component layer
+async loadUsers() {
+  try {
+    this.users.set(await this.userService.getUsers());
+  } catch (error) {
+    // Show notification
+    this.notification.error('Failed to load users');
+  }
+}
 ```
 
 ---
 
-## Security Considerations
+## Database Architecture
 
-### Input Validation
-
-**Backend**:
-```rust
-// Validate all inputs
-if !dto.email.contains('@') {
-    return Err(AppError::Validation(
-        ErrorValue::new(ErrorCode::ValidationFailed, "Invalid email")
-            .with_field("email")
-    ));
-}
-```
-
-**Frontend**:
-```typescript
-// Client-side validation
-if (!email.includes('@')) {
-    errorService.report({
-        code: ErrorCode.ValidationFailed,
-        message: 'Invalid email',
-        field: 'email'
-    });
-    return;
-}
-```
-
-### SQL Injection Prevention
+### Connection Pooling
 
 ```rust
-// Use parameterized queries
-conn.execute(
-    "INSERT INTO users (name, email) VALUES (?, ?)",
-    params![name, email]  // ← Parameters, not string concatenation
-)?;
-```
+// src/core/infrastructure/database/connection.rs
+pub struct Database {
+    pool: Arc<Mutex<r2d2::Pool<SqliteConnectionManager>>>,
+}
 
-### XSS Prevention
+impl Database {
+    pub fn new(db_path: &str) -> Result<Self> {
+        let manager = SqliteConnectionManager::file(db_path);
+        let pool = r2d2::Pool::builder()
+            .max_size(10)  // Max 10 connections
+            .build(manager)?;
+        Ok(Self { pool: Arc::new(Mutex::new(pool)) })
+    }
 
-```typescript
-// Angular auto-escapes by default
-// Use DomSanitizer for trusted HTML
-constructor(private sanitizer: DomSanitizer) {}
-
-getTrustedHtml(html: string): SafeHtml {
-    return this.sanitizer.bypassSecurityTrustHtml(html);
+    pub fn get_conn(&self) -> Result<r2d2::PooledConnection<SqliteConnectionManager>> {
+        Ok(self.pool.lock().unwrap().get()?)
+    }
 }
 ```
 
----
-
-## Performance Optimizations
-
-### Backend
-
-1. **Connection Pooling**: r2d2 pool prevents mutex contention
-2. **Prepared Statements**: SQL statements cached and reused
-3. **Log Buffering**: Batch file writes for I/O efficiency
-4. **Error Tracking**: Circular buffer (last 100 errors only)
-
-### Frontend
-
-1. **Signals**: Fine-grained reactivity (no zone.js overhead for signals)
-2. **Lazy Loading**: Routes loaded on demand
-3. **Tree Shaking**: Rspack removes unused code
-4. **Event Debouncing**: Search input debounced
-
----
-
-## Testing Strategy
-
-### Backend Tests
+### Repository Implementation
 
 ```rust
-#[test]
-fn test_database_init() {
-    let db = Database::new(":memory:").expect("Failed to create DB");
-    assert!(db.init().is_ok());
-}
-
-#[test]
-fn test_insert_and_get_user() {
-    let db = create_test_db();
-    
-    let user_id = db.insert_user("Test", "test@example.com", "User", "Active")
-        .expect("Failed to insert");
-    
-    let user = db.get_user_by_id(user_id)
-        .expect("Failed to get")
-        .expect("User not found");
-    
-    assert_eq!(user.name, "Test");
-}
-```
-
-### Frontend Tests
-
-```typescript
-describe('ErrorInterceptor', () => {
-  it('should capture errors', () => {
-    const interceptor = new ErrorInterceptor();
-    
-    interceptor.interceptWebUICall('test', () => {
-      throw new Error('Test error');
-    });
-    
-    const stats = interceptor.getStats();
-    expect(stats.total).toBe(1);
-  });
-});
+// Each entity has its own repository file
+src/core/infrastructure/database/
+├── users.rs      # UserRepository impl
+├── products.rs   # ProductRepository impl
+├── orders.rs     # OrderRepository impl
+└── models.rs     # Data structures
 ```
 
 ---
 
-## Related Documentation
+## Next Steps
 
-- [Project Structure](08-project-structure.md) - File organization
-- [Communication](04-communication.md) - IPC patterns
-- [Error Handling](../ERROR_HANDLING_GUIDE.md) - Error patterns
-- [Connection Pooling](REFACTORING_CONNECTION_POOLING.md) - Database optimization
+- [Build System Guide](#/build-system) - Learn how to build and deploy
+- [Development Workflow](#/development-workflow) - Set up your dev environment
+- [Testing Guide](#/testing) - Learn how to test your code

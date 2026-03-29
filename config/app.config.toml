@@ -35,6 +35,14 @@ file = "logs/application.log"
 append = true
 # Append to existing log file or overwrite
 
+# Log rotation settings (prevents unbounded log growth)
+max_size_mb = 10
+# Maximum log file size in MB before rotation
+max_files = 5
+# Maximum number of rotated log files to keep
+rotate_on_startup = false
+# Rotate log file on application startup
+
 [communication]
 # Backend-Frontend communication settings
 transport = "webview_ffi"

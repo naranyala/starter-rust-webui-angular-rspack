@@ -10,7 +10,7 @@ use webui_rs::webui::bindgen::webui_set_port;
 mod core;
 use core::{
     error::ErrorCode,
-    infrastructure::{config::AppConfig, database::Database, di, error_handler, logging},
+    infrastructure::{config::AppConfig, ctrlc_handler, database::Database, di, error_handler, logging},
     presentation,
 };
 
@@ -306,7 +306,15 @@ fn main() {
     // Set root folder for WebUI to serve static files
     let root_folder = dist_dir.to_str().unwrap_or("dist");
     info!("Setting WebUI root folder to: {}", root_folder);
-    let c_string = std::ffi::CString::new(root_folder).unwrap();
+    
+    let c_string = match std::ffi::CString::new(root_folder) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to create C string for root folder: {}", e);
+            return;
+        }
+    };
+    
     unsafe {
         webui_rs::webui::bindgen::webui_set_root_folder(my_window.id, c_string.as_ptr());
     }
@@ -328,6 +336,10 @@ fn main() {
 
     info!("Application started successfully, waiting for events...");
     info!("=============================================");
+
+    // Set up graceful shutdown handler
+    let db_for_shutdown = Arc::clone(&db);
+    ctrlc_handler::setup_shutdown_handler(db_for_shutdown);
 
     // Wait until all windows are closed
     webui::wait();

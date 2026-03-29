@@ -1,11 +1,27 @@
 use std::env;
 use std::fs;
 use std::path::Path;
-fn main() {
-    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+use std::process;
 
-    generate_build_config(&project_dir);
-    generate_embedded_frontend_assets(&project_dir);
+fn main() {
+    let project_dir = match env::var("CARGO_MANIFEST_DIR") {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("ERROR: Failed to get CARGO_MANIFEST_DIR: {}", e);
+            eprintln!("This should always be set by Cargo. Please check your Rust installation.");
+            process::exit(1);
+        }
+    };
+
+    if let Err(e) = generate_build_config(&project_dir) {
+        eprintln!("ERROR: Failed to generate build config: {}", e);
+        process::exit(1);
+    }
+
+    if let Err(e) = generate_embedded_frontend_assets(&project_dir) {
+        eprintln!("ERROR: Failed to generate embedded frontend assets: {}", e);
+        process::exit(1);
+    }
 
     let src_dir = format!("{}/thirdparty/webui-c-src/src", project_dir);
     let civetweb_dir = format!("{}/civetweb", src_dir);
@@ -57,7 +73,7 @@ fn main() {
     }
 }
 
-fn generate_build_config(project_dir: &str) {
+fn generate_build_config(project_dir: &str) -> Result<(), String> {
     let config_paths = [
         format!("{}/app.config.toml", project_dir),
         format!("{}/config/app.config.toml", project_dir),
@@ -80,7 +96,7 @@ fn generate_build_config(project_dir: &str) {
                         executable_name = exe_name.to_string();
                     }
                 }
-                
+
                 if let Some(log) = config.get("logging") {
                     if let Some(level) = log.get("level").and_then(|l| l.as_str()) {
                         log_level = level.to_string();
@@ -98,8 +114,13 @@ fn generate_build_config(project_dir: &str) {
         package_name = name;
     }
 
-    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = match env::var("OUT_DIR") {
+        Ok(dir) => dir,
+        Err(e) => return Err(format!("Failed to get OUT_DIR: {}", e)),
+    };
     let build_config_path = format!("{}/build_config.rs", out_dir);
+
+    let package_version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "1.0.0".to_string());
 
     let build_config = format!(
         r#"// Auto-generated build configuration
@@ -124,19 +145,23 @@ pub fn get_log_file() -> &'static str {{
 }}
 "#,
         package_name,
-        env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "1.0.0".to_string()),
+        package_version,
         executable_name,
         log_level,
         log_file
     );
 
-    if let Err(e) = fs::write(&build_config_path, build_config) {
-        eprintln!("Warning: Failed to write build config: {}", e);
-    }
+    fs::write(&build_config_path, build_config)
+        .map_err(|e| format!("Failed to write build config to {}: {}", build_config_path, e))?;
+
+    Ok(())
 }
 
-fn generate_embedded_frontend_assets(project_dir: &str) {
-    let out_dir = env::var("OUT_DIR").unwrap();
+fn generate_embedded_frontend_assets(project_dir: &str) -> Result<(), String> {
+    let out_dir = match env::var("OUT_DIR") {
+        Ok(dir) => dir,
+        Err(e) => return Err(format!("Failed to get OUT_DIR: {}", e)),
+    };
     let generated_path = format!("{}/embedded_frontend.rs", out_dir);
 
     let index_path = format!("{}/dist/index.html", project_dir);
@@ -181,7 +206,8 @@ pub const EMBEDDED_WEBUI_JS: &str = "";
         }
     };
 
-    if let Err(e) = fs::write(&generated_path, generated) {
-        eprintln!("Warning: Failed to write embedded frontend assets: {}", e);
-    }
+    fs::write(&generated_path, generated)
+        .map_err(|e| format!("Failed to write embedded frontend assets: {}", e))?;
+
+    Ok(())
 }

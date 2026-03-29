@@ -1,240 +1,171 @@
-<div class="app-container" [class.top-collapsed]="topCollapsed()" [class.bottom-collapsed]="bottomCollapsed()">
-  <!-- TOP PANEL -->
-  <header class="top-panel">
-    <div class="top-bar" (click)="toggleTop()">
-      <div class="top-bar__left">
-        <span class="top-bar__brand">
-          <span class="top-bar__icon">⚡</span>
-          <span class="top-bar__name">TechHub</span>
-        </span>
-      </div>
-      <div class="top-bar__right">
-        <span class="top-bar__stat">
-          <span class="top-bar__stat-icon">🗗</span>
-          {{ windowEntries().length }}
-        </span>
-        <span class="top-bar__stat">
-          <span class="top-bar__stat-icon">🗕</span>
-          {{ minimizedWindowCount() }}
-        </span>
-      </div>
-      <span class="top-bar__toggle">
-        {{ topCollapsed() ? '▼' : '▲' }}
-      </span>
-    </div>
-    
-    <div class="top-panel__content">
-      <nav class="top-nav">
-        <button type="button" class="top-nav__item"
-                [class.active]="!hasFocusedWindow()"
-                (click)="showMainMenu($event)"
-                title="Show all windows">
-          <span class="top-nav__icon">🏠</span>
-          <span class="top-nav__label">Home</span>
-        </button>
-
-        @for (windowEntry of windowEntries(); track windowEntry.id) {
-          <button type="button" class="top-nav__item"
-                  [class.active]="windowEntry.focused"
-                  [class.minimized]="windowEntry.minimized"
-                  (click)="activateWindow(windowEntry.id, $event)"
-                  [title]="windowEntry.title">
-            <span class="top-nav__icon">{{ windowEntry.minimized ? '🗕' : '🗗' }}</span>
-            <span class="top-nav__label">{{ windowEntry.title }}</span>
-          </button>
-        }
-      </nav>
-    </div>
-  </header>
-
-  <!-- MAIN CONTENT -->
-  <main class="main-content">
-    <div class="search-section">
-      <div class="search-container">
-        <span class="search-icon">🔍</span>
-        <input type="text" 
-               class="search-input" 
-               placeholder="Search technologies..." 
-               [value]="searchQuery()" 
-               (input)="onSearch($event)" />
-        @if (searchQuery()) {
-          <button type="button" class="clear-btn" (click)="clearSearch()" title="Clear search">✕</button>
-        }
-      </div>
-    </div>
-    
-    <div class="cards-grid">
-      @for (card of filteredCards(); track card.id) {
-        <article class="card" 
-                 [style.border-left-color]="card.color" 
-                 (click)="openCard(card)"
-                 [attr.data-card-id]="card.id"
-                 tabindex="0"
-                 (keydown.enter)="openCard(card)"
-                 (keydown.space)="openCard(card)">
-          <div class="card__icon" [style.background]="card.color">
-            {{ card.icon }}
-          </div>
-          <h3 class="card__title">{{ card.title }}</h3>
-          <p class="card__description">{{ card.description }}</p>
-          <span class="card__hint">Click to learn more</span>
-        </article>
-      } @empty {
-        <div class="no-results">
-          <span class="no-results__icon">🔎</span>
-          <p class="no-results__text">No matching cards for "{{ searchQuery() }}"</p>
+<div class="app-container">
+  <!-- Desktop: Two-column layout (sidebar + content) -->
+  <main class="main-container desktop-layout">
+    <!-- LEFT SIDEBAR - Navigation -->
+    <aside class="sidebar" [class.sidebar--collapsed]="sidebarCollapsed()">
+      <div class="sidebar__content">
+        <!-- Logo/Brand -->
+        <div class="sidebar__brand">
+          <lucide-angular [img]="icons.Folder" class="brand__icon" size="24"></lucide-angular>
+          @if (!sidebarCollapsed()) {
+            <span class="brand__label">WebUI App</span>
+          }
         </div>
-      }
-    </div>
-  </main>
 
-  <!-- BOTTOM PANEL -->
-  <footer class="bottom-panel">
-    <div class="bottom-panel__content">
-      <!-- Status Bar -->
-      <div class="status-bar">
-        <div class="status-bar__left">
-          <div class="status-indicator" 
-               [class.connected]="wsConnectionState() === 'connected'"
-               [class.connecting]="wsConnectionState() === 'connecting'"
-               [class.disconnected]="wsConnectionState() === 'disconnected'"
-               [class.error]="wsConnectionState() === 'error'">
-          </div>
-          <span class="status-bar__text">
-            {{ wsConnectionState() | titlecase }}
-            @if (wsPort()) {
-              <span class="status-bar__detail">• Port: {{ wsPort() }}</span>
-            }
-            @if (wsLastError()) {
-              <span class="status-bar__error">• {{ wsLastError() }}</span>
-            }
-          </span>
-        </div>
-        <div class="status-bar__right">
-          <span class="status-bar__mini-stat">
-            <span class="status-bar__mini-label">Latency:</span>
-            {{ wsLatency() }}ms
-          </span>
-          <span class="status-bar__mini-stat">
-            <span class="status-bar__mini-label">Uptime:</span>
-            {{ formatUptime(wsUptime()) }}
-          </span>
-        </div>
-        <button class="status-bar__toggle" 
-                type="button" 
-                (click)="toggleBottom(); $event.stopPropagation()"
-                title="Toggle details">
-          {{ bottomCollapsed() ? '⌄' : '⌃' }}
-        </button>
-      </div>
-
-      <!-- Expanded Content -->
-      @if (!bottomCollapsed()) {
-        <div class="bottom-panel__expanded">
-          <!-- Tabs -->
-          <div class="bottom-tabs">
-            @for (tab of bottomPanelTabs; track tab.id) {
-              <button type="button" class="bottom-tabs__tab"
-                      [class.active]="activeBottomTab() === tab.id"
-                      (click)="selectBottomTab(tab.id, $event)">
-                <span class="bottom-tabs__icon">{{ tab.icon }}</span>
-                <span class="bottom-tabs__label">{{ tab.label }}</span>
+        <!-- Search (only when expanded) -->
+        @if (!sidebarCollapsed()) {
+          <div class="sidebar__search">
+            <lucide-angular [img]="icons.Search" class="search__icon" size="16"></lucide-angular>
+            <input
+              type="text"
+              class="search__input"
+              placeholder="Search..."
+              [value]="searchQuery()"
+              (input)="onSearchChange($event)">
+            @if (searchQuery()) {
+              <button type="button" class="search__clear" (click)="clearSearch()">
+                <lucide-angular [img]="icons.X" size="14"></lucide-angular>
               </button>
             }
-            <button type="button" class="bottom-tabs__tab"
-                    [class.active]="activeBottomTab() === 'devtools'"
-                    (click)="selectBottomTab('devtools', $event)">
-              <span class="bottom-tabs__icon">🛠️</span>
-              <span class="bottom-tabs__label">DevTools</span>
+          </div>
+        }
+
+        <!-- Navigation Menu -->
+        <nav class="sidebar__nav">
+          @for (item of filteredMenus(); track item.id) {
+            <button
+              type="button"
+              class="nav-item"
+              [class.nav-item--active]="activeView() === item.id"
+              (click)="setActiveView(item.id)"
+              [attr.title]="sidebarCollapsed() ? item.label : null">
+              <lucide-angular [img]="getIcon(item.icon)" class="nav-item__icon" size="20"></lucide-angular>
+              @if (!sidebarCollapsed()) {
+                <span class="nav-item__label">{{ item.label }}</span>
+              }
             </button>
-          </div>
+          }
+        </nav>
+      </div>
 
-          <!-- Tab Content -->
-          <div class="bottom-tabs__content">
-            @if (activeBottomTab() === 'devtools') {
-              <app-devtools></app-devtools>
-            } @else if (activeBottomTab() === 'overview') {
-              <div class="tab-panel">
-                <div class="info-card">
-                  <span class="info-card__label">Runtime</span>
-                  <span class="info-card__value">WebUI (GTK/WebKit)</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">Status</span>
-                  <span class="info-card__value" 
-                        [class.status-ok]="wsConnectionState() === 'connected'"
-                        [class.warn]="wsConnectionState() !== 'connected'">
-                    {{ wsConnectionState() === 'connected' ? 'Ready' : wsConnectionState() }}
-                  </span>
-                </div>
+      <!-- Sidebar Footer -->
+      <div class="sidebar__footer">
+        <button
+          type="button"
+          class="sidebar__toggle"
+          (click)="toggleSidebar()"
+          [attr.title]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
+          <lucide-angular [img]="sidebarCollapsed() ? icons.Menu : icons.X" size="18"></lucide-angular>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <section class="content">
+      @switch (activeView()) {
+        @case ('home') {
+          <div class="page">
+            <header class="page__header">
+              <lucide-angular [img]="icons.Home" size="28"></lucide-angular>
+              <h1 class="page__title">Home</h1>
+            </header>
+            <p class="page__description">Welcome to your dashboard. Select an option from the sidebar to get started.</p>
+            <div class="card-grid">
+              <div class="card">
+                <h3 class="card__title">Quick Start</h3>
+                <p class="card__description">Get started by exploring the features in the sidebar.</p>
               </div>
-            } @else if (activeBottomTab() === 'metrics') {
-              <div class="tab-panel">
-                <div class="info-card">
-                  <span class="info-card__label">Memory</span>
-                  <span class="info-card__value">24.5 MB</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">CPU</span>
-                  <span class="info-card__value">2.3%</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">Windows</span>
-                  <span class="info-card__value">{{ windowEntries().length }}</span>
-                </div>
+              <div class="card">
+                <h3 class="card__title">Recent Activity</h3>
+                <p class="card__description">View your recent activities and updates here.</p>
               </div>
-            } @else if (activeBottomTab() === 'events') {
-              <div class="tab-panel">
-                <div class="info-card">
-                  <span class="info-card__label">Events Today</span>
-                  <span class="info-card__value">12</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">Errors</span>
-                  <span class="info-card__value status-ok">0</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">Last Event</span>
-                  <span class="info-card__value">2m ago</span>
-                </div>
-              </div>
-            } @else if (activeBottomTab() === 'connection') {
-              <div class="tab-panel">
-                <div class="info-card">
-                  <span class="info-card__label">Latency</span>
-                  <span class="info-card__value">{{ wsLatency() }}ms</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">Uptime</span>
-                  <span class="info-card__value">{{ formatUptime(wsUptime()) }}</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">Success Rate</span>
-                  <span class="info-card__value">{{ wsTotalCalls() > 0 ? (wsSuccessfulCalls() / wsTotalCalls() * 100 | number:'1.0-0') : 100 }}%</span>
-                </div>
-              </div>
-            } @else if (activeBottomTab() === 'info') {
-              <div class="tab-panel">
-                <div class="info-card">
-                  <span class="info-card__label">Version</span>
-                  <span class="info-card__value">1.0.0</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">Build</span>
-                  <span class="info-card__value">2024.02.18</span>
-                </div>
-                <div class="info-card">
-                  <span class="info-card__label">Stack</span>
-                  <span class="info-card__value">Angular + Rust</span>
-                </div>
-              </div>
-            }
+            </div>
           </div>
-        </div>
+        }
+        @case ('auth') {
+          <div class="page">
+            <header class="page__header">
+              <lucide-angular [img]="icons.Lock" size="28"></lucide-angular>
+              <h1 class="page__title">Authentication</h1>
+            </header>
+            <p class="page__description">Manage authentication settings and security preferences.</p>
+            <div class="card-grid">
+              <div class="card">
+                <h3 class="card__title">Login Settings</h3>
+                <p class="card__description">Configure your login preferences and security options.</p>
+              </div>
+              <div class="card">
+                <h3 class="card__title">User Management</h3>
+                <p class="card__description">Manage user accounts and permissions.</p>
+              </div>
+            </div>
+          </div>
+        }
+        @case ('sqlite') {
+          <div class="page">
+            <header class="page__header">
+              <lucide-angular [img]="icons.Database" size="28"></lucide-angular>
+              <h1 class="page__title">SQLite CRUD</h1>
+            </header>
+            <p class="page__description">Database operations and data management.</p>
+            <div class="card-grid">
+              <div class="card">
+                <h3 class="card__title">Database Tables</h3>
+                <p class="card__description">View and manage your database tables.</p>
+              </div>
+              <div class="card">
+                <h3 class="card__title">Query Builder</h3>
+                <p class="card__description">Build and execute database queries.</p>
+              </div>
+            </div>
+          </div>
+        }
+        @case ('devtools') {
+          <div class="page">
+            <header class="page__header">
+              <lucide-angular [img]="icons.Settings" size="28"></lucide-angular>
+              <h1 class="page__title">DevTools</h1>
+            </header>
+            <p class="page__description">Debugging tools and development utilities.</p>
+            <div class="card-grid">
+              <div class="card">
+                <h3 class="card__title">Console</h3>
+                <p class="card__description">View application logs and debug output.</p>
+              </div>
+              <div class="card">
+                <h3 class="card__title">Network Monitor</h3>
+                <p class="card__description">Monitor network requests and responses.</p>
+              </div>
+            </div>
+          </div>
+        }
+        @default {
+          <div class="page">
+            <header class="page__header">
+              <lucide-angular [img]="icons.Home" size="28"></lucide-angular>
+              <h1 class="page__title">{{ activeView() | titlecase }}</h1>
+            </header>
+            <p class="page__description">Content coming soon...</p>
+          </div>
+        }
       }
-    </div>
-  </footer>
+    </section>
+  </main>
 
-  <!-- Error Modal -->
-  <app-error-modal [error]="globalErrorService.activeError()" (dismissed)="globalErrorService.dismiss()" />
+  <!-- Mobile: Bottom Navigation -->
+  <nav class="mobile-nav mobile-layout">
+    @for (item of filteredMenus(); track item.id) {
+      <button
+        type="button"
+        class="mobile-nav__item"
+        [class.mobile-nav__item--active]="activeView() === item.id"
+        (click)="setActiveView(item.id)">
+        <lucide-angular [img]="getIcon(item.icon)" class="mobile-nav__icon" size="22"></lucide-angular>
+        <span class="mobile-nav__label">{{ item.label }}</span>
+      </button>
+    }
+  </nav>
+
+  <!-- Window Layer for WinBox -->
+  <div class="window-layer"></div>
 </div>

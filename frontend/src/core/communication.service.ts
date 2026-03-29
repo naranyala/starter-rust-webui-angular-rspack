@@ -1,153 +1,383 @@
-// Communication Service Facade - Delegates to specialized channel services
-// This service is deprecated. Use the specialized services directly:
-// - WebUiBridgeService for RPC calls
-// - EventBusService for pub/sub events
-// - SharedStateService for shared state
-// - MessageQueueService for async messaging
-// - BroadcastService for broadcasting
-import { Injectable, inject } from '@angular/core';
-import { WebUiBridgeService } from './webui-bridge.service';
-import { EventBusService } from '../app/services/event-bus.service';
-import { SharedStateService } from './shared-state.service';
-import { MessageQueueService } from './message-queue.service';
-import { BroadcastService } from './broadcast.service';
+// Multi-channel communication service for backend-frontend communication
+// Supports: WebUI Bridge, Event Bus, Shared State, Message Queue, Broadcast
+import { Injectable, signal, computed, inject } from '@angular/core';
+import { ApiService } from './api.service';
+import { DEFAULT_TIMEOUT_MS } from '../app/constants/app.constants';
 
-// Re-export types for backward compatibility
-export type { Subscription } from '../app/services/event-bus.service';
-export type { SharedState } from './shared-state.service';
-export type { Message } from './message-queue.service';
-export type { BroadcastMessage } from './broadcast.service';
+// ============================================================================
+// Type Definitions
+// ============================================================================
 
-/**
- * @deprecated Use specialized services directly. This facade is for backward compatibility.
- */
+export type MessageChannel = 'webui-bridge' | 'event-bus' | 'shared-state' | 'message-queue' | 'broadcast';
+export type MessageType = 'request' | 'response' | 'event' | 'broadcast' | 'state-update' | 'ack';
+
+export interface Message {
+  id: string;
+  channel: MessageChannel;
+  type: MessageType;
+  source: 'frontend' | 'backend';
+  destination: string;
+  timestamp: number;
+  data: unknown;
+  priority: number;
+}
+
+export interface CommunicationStats {
+  totalMessages: number;
+  messagesByChannel: Record<string, number>;
+  messagesByType: Record<string, number>;
+  queueLength: number;
+  broadcastCount: number;
+  activeSubscriptions: number;
+  stateVersion: number;
+  lastActivity: number;
+}
+
+export interface SharedState {
+  [key: string]: unknown;
+}
+
+export type EventHandler = (data: unknown, event: string) => void;
+export type StateChangeHandler = (key: string, value: unknown) => void;
+
+// ============================================================================
+// Communication Service
+// ============================================================================
+
 @Injectable({ providedIn: 'root' })
 export class CommunicationService {
-  private readonly bridge = inject(WebUiBridgeService);
-  private readonly eventBus = inject(EventBusService);
-  private readonly state = inject(SharedStateService);
-  private readonly queue = inject(MessageQueueService);
-  private readonly broadcastService = inject(BroadcastService);
+  private readonly api = inject(ApiService);
 
-  // Delegated properties
-  readonly queueLength = this.queue.queueLength;
+  // State Signals
+  private readonly stats = signal<CommunicationStats>({
+    totalMessages: 0,
+    messagesByChannel: {},
+    messagesByType: {},
+    queueLength: 0,
+    broadcastCount: 0,
+    activeSubscriptions: 0,
+    stateVersion: 0,
+    lastActivity: Date.now(),
+  });
+
+  private readonly sharedState = signal<SharedState>({});
+  private readonly messageQueue = signal<Message[]>([]);
+  private readonly eventHandlers = new Map<string, Set<EventHandler>>();
+  private readonly stateHandlers = new Set<StateChangeHandler>();
+
+  // Public Signals
+  readonly stats$ = this.stats.asReadonly();
+  readonly sharedState$ = this.sharedState.asReadonly();
+  readonly queue$ = this.messageQueue.asReadonly();
+  readonly queueLength = computed(() => this.messageQueue().length);
+  readonly isConnected = signal(true);
+
+  constructor() {
+    this.setupEventListeners();
+    this.setupStateSync();
+  }
+
+  // ============================================================================
+  // WebUI Bridge Channel (RPC)
+  // ============================================================================
 
   /**
-   * @deprecated Use WebUiBridgeService.callOrThrow()
+   * Call backend function via WebUI bridge
    */
   async call<T>(functionName: string, args: unknown[] = []): Promise<T> {
-    return this.bridge.callOrThrow<T>(functionName, args);
+    this.incrementStats('webui-bridge', 'request');
+    return this.api.callOrThrow<T>(functionName, args);
   }
 
   /**
-   * @deprecated Use WebUiBridgeService.callWithResponse()
+   * Call with response event listener
    */
   async callWithResponse<T>(functionName: string, args: unknown[] = []): Promise<T> {
-    return this.bridge.callWithResponse<T>(functionName, args);
+    return new Promise((resolve, reject) => {
+      const responseEvent = `${functionName}_response`;
+      
+      const handler = (event: CustomEvent<T>) => {
+        window.removeEventListener(responseEvent, handler as EventListener);
+        this.incrementStats('webui-bridge', 'response');
+        resolve(event.detail);
+      };
+
+      window.addEventListener(responseEvent, handler as EventListener);
+
+      this.call(functionName, args).catch(reject);
+
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        window.removeEventListener(responseEvent, handler as EventListener);
+        reject(new Error(`Timeout waiting for response: ${functionName}`));
+      }, DEFAULT_TIMEOUT_MS);
+    });
   }
 
+  // ============================================================================
+  // Event Bus Channel (Pub/Sub)
+  // ============================================================================
+
   /**
-   * @deprecated Use EventBusService.subscribe()
+   * Subscribe to an event
    */
-  subscribe(event: string, handler: (data: unknown, event: string) => void): () => void {
-    const sub = this.eventBus.subscribe(event, (data: unknown) => handler(data, event));
-    return () => sub.unsubscribe();
+  subscribe(event: string, handler: EventHandler): () => void {
+    if (!this.eventHandlers.has(event)) {
+      this.eventHandlers.set(event, new Set());
+    }
+    this.eventHandlers.get(event)!.add(handler);
+    this.updateSubscriptionCount();
+
+    // Return unsubscribe function
+    return () => {
+      this.eventHandlers.get(event)?.delete(handler);
+      this.updateSubscriptionCount();
+    };
   }
 
   /**
-   * @deprecated Use EventBusService.publish()
+   * Publish an event to backend
    */
   async publish(event: string, data: unknown): Promise<void> {
-    this.eventBus.publish(event, data);
+    this.incrementStats('event-bus', 'event');
+    await this.api.call('publishEvent', [event, data]).catch(() => {});
   }
 
   /**
-   * @deprecated Use EventBusService.emit()
+   * Emit a local event (frontend only)
    */
   emit(event: string, data: unknown): void {
-    this.eventBus.publish(event, data);
+    const handlers = this.eventHandlers.get(event);
+    if (handlers) {
+      handlers.forEach(handler => handler(data, event));
+    }
+
+    // Also notify backend
+    this.publish(event, data).catch(() => {});
   }
 
   /**
-   * @deprecated Use SharedStateService.getState()
+   * Get event history from backend
+   */
+  async getEventHistory(): Promise<Message[]> {
+    return this.api.callOrThrow<Message[]>('devtools.getLogs').catch(() => []);
+  }
+
+  // ============================================================================
+  // Shared State Channel
+  // ============================================================================
+
+  /**
+   * Get a value from shared state
    */
   getState<T>(key: string): T | undefined {
-    return this.state.getState<T>(key);
+    return this.sharedState()[key] as T;
   }
 
   /**
-   * @deprecated Use SharedStateService.setState()
+   * Set a value in shared state
    */
   async setState(key: string, value: unknown): Promise<void> {
-    await this.state.setState(key, value);
+    this.sharedState.update(state => ({ ...state, [key]: value }));
+    this.stats.update(s => ({ ...s, stateVersion: s.stateVersion + 1 }));
+    
+    // Notify backend
+    await this.api.call('setSharedState', [key, value]).catch(() => {});
+    
+    // Notify local subscribers
+    this.stateHandlers.forEach(handler => handler(key, value));
   }
 
   /**
-   * @deprecated Use SharedStateService.subscribeState()
+   * Subscribe to state changes
    */
-  subscribeState(handler: (key: string, value: unknown) => void): () => void {
-    return this.state.subscribeState(handler);
+  subscribeState(handler: StateChangeHandler): () => void {
+    this.stateHandlers.add(handler);
+    return () => {
+      this.stateHandlers.delete(handler);
+    };
   }
 
   /**
-   * @deprecated Use MessageQueueService.enqueue()
+   * Get all shared state
+   */
+  getAllState(): SharedState {
+    return { ...this.sharedState() };
+  }
+
+  // ============================================================================
+  // Message Queue Channel (Async)
+  // ============================================================================
+
+  /**
+   * Enqueue a message for async processing
    */
   async enqueue(destination: string, data: unknown, priority: number = 1): Promise<void> {
-    await this.queue.enqueue(destination, data, priority);
+    const message: Message = {
+      id: this.generateId(),
+      channel: 'message-queue',
+      type: 'request',
+      source: 'frontend',
+      destination,
+      timestamp: Date.now(),
+      data,
+      priority,
+    };
+
+    this.messageQueue.update(queue => [...queue, message]);
+    this.stats.update(s => ({ ...s, queueLength: this.messageQueue().length }));
+
+    // Send to backend queue
+    await this.api.call('enqueueMessage', [destination, JSON.stringify(data), priority]).catch(() => {});
   }
 
   /**
-   * @deprecated Use MessageQueueService.dequeue()
+   * Dequeue and process next message
    */
   async dequeue<T>(): Promise<T | null> {
-    return this.queue.dequeue<T>();
+    const queue = this.messageQueue();
+    if (queue.length === 0) {
+      return null;
+    }
+
+    const message = queue[0];
+    this.messageQueue.update(q => q.slice(1));
+    this.stats.update(s => ({ ...s, queueLength: this.messageQueue().length }));
+
+    return message.data as T;
   }
 
   /**
-   * @deprecated Use MessageQueueService.peek()
+   * Peek at next message without removing
    */
-  peek() {
-    return this.queue.peek();
+  peek(): Message | null {
+    const queue = this.messageQueue();
+    return queue.length > 0 ? queue[0] : null;
   }
 
   /**
-   * @deprecated Use MessageQueueService.clearQueue()
+   * Clear message queue
    */
   clearQueue(): void {
-    this.queue.clearQueue();
+    this.messageQueue.set([]);
+    this.stats.update(s => ({ ...s, queueLength: 0 }));
   }
 
+  // ============================================================================
+  // Broadcast Channel (One-to-Many)
+  // ============================================================================
+
   /**
-   * @deprecated Use BroadcastService.broadcast()
+   * Broadcast a message to all clients
    */
   async broadcast(event: string, data: unknown): Promise<void> {
-    await this.broadcastService.broadcast(event, data);
+    this.stats.update(s => ({ ...s, broadcastCount: s.broadcastCount + 1 }));
+    await this.api.call('broadcast', [event, data]).catch(() => {});
   }
 
   /**
-   * @deprecated Use BroadcastService.onBroadcast()
+   * Listen for broadcast messages
    */
-  onBroadcast(handler: (data: unknown) => void): () => void {
-    return this.broadcastService.onBroadcast(msg => handler(msg.data));
+  onBroadcast(handler: EventHandler): () => void {
+    return this.subscribe('broadcast', handler);
   }
 
+  // ============================================================================
+  // Statistics and Monitoring
+  // ============================================================================
+
   /**
-   * Get aggregated stats from all services
+   * Get communication statistics
    */
-  getStats() {
-    return {
-      bridge: this.bridge.getStats(),
-      broadcast: this.broadcastService.getStats(),
-      queueLength: this.queue.queueLength(),
-      stateVersion: this.state.version$(),
-    };
+  getStats(): CommunicationStats {
+    return this.stats();
   }
 
   /**
    * Reset all statistics
    */
   resetStats(): void {
-    this.bridge.resetStats();
-    this.broadcastService.resetStats();
+    this.stats.set({
+      totalMessages: 0,
+      messagesByChannel: {},
+      messagesByType: {},
+      queueLength: 0,
+      broadcastCount: 0,
+      activeSubscriptions: 0,
+      stateVersion: 0,
+      lastActivity: Date.now(),
+    });
+  }
+
+  /**
+   * Get channel usage breakdown
+   */
+  getChannelUsage(): Record<string, number> {
+    return { ...this.stats().messagesByChannel };
+  }
+
+  // ============================================================================
+  // Private Helpers
+  // ============================================================================
+
+  private setupEventListeners(): void {
+    // Listen for backend events
+    window.addEventListener('backend-event', ((event: CustomEvent) => {
+      const { event: eventName, data } = event.detail;
+      this.emit(eventName, data);
+    }) as EventListener);
+
+    // Listen for state updates
+    window.addEventListener('state-update', ((event: CustomEvent) => {
+      const { key, value } = event.detail;
+      this.sharedState.update(state => ({ ...state, [key]: value }));
+      this.stateHandlers.forEach(handler => handler(key, value));
+    }) as EventListener);
+
+    // Listen for broadcast messages
+    window.addEventListener('broadcast-message', ((event: CustomEvent) => {
+      const { event: eventName, data } = event.detail;
+      this.emit('broadcast', { event: eventName, data });
+    }) as EventListener);
+  }
+
+  private setupStateSync(): void {
+    // Periodically sync state with backend
+    setInterval(async () => {
+      try {
+        const backendState = await this.api.call<SharedState>('getSharedState').catch(() => ({}));
+        this.sharedState.update(state => ({ ...state, ...backendState }));
+      } catch {
+        // Ignore sync errors
+      }
+    }, 5000);
+  }
+
+  private incrementStats(channel: MessageChannel, type: MessageType): void {
+    this.stats.update(s => ({
+      ...s,
+      totalMessages: s.totalMessages + 1,
+      messagesByChannel: {
+        ...s.messagesByChannel,
+        [channel]: (s.messagesByChannel[channel] || 0) + 1,
+      },
+      messagesByType: {
+        ...s.messagesByType,
+        [type]: (s.messagesByType[type] || 0) + 1,
+      },
+      lastActivity: Date.now(),
+    }));
+  }
+
+  private updateSubscriptionCount(): void {
+    let count = 0;
+    this.eventHandlers.forEach(handlers => {
+      count += handlers.size;
+    });
+    this.stats.update(s => ({ ...s, activeSubscriptions: count }));
+  }
+
+  private generateId(): string {
+    return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }

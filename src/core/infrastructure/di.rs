@@ -11,10 +11,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::core::domain::traits::{
-    ConfigRepository, OrderRepository, ProductRepository, UserRepository,
+    OrderRepository, ProductRepository, UserRepository,
 };
 use crate::core::error::{AppError, AppResult, ErrorCode, ErrorValue};
-use crate::core::infrastructure::database::{Database, FileConfigRepository};
+use crate::core::infrastructure::database::Database;
 use crate::core::infrastructure::logging::Logger;
 
 /// DI Container for infrastructure services
@@ -86,7 +86,7 @@ impl Container {
     }
 
     /// Resolve a trait object as Arc
-    pub fn resolve_arc<T: 'static + Send + Sync + ?Sized>(&self) -> AppResult<Arc<T>> {
+    pub fn resolve_arc<T: 'static + Send + Sync>(&self) -> AppResult<Arc<T>> {
         let type_id = TypeId::of::<Arc<T>>();
         let services = self.services.lock().map_err(|e| {
             AppError::LockPoisoned(
@@ -160,9 +160,6 @@ pub fn register_infrastructure_services(db: Arc<Database>) -> AppResult<()> {
     container.register_trait(Arc::clone(&db) as Arc<dyn UserRepository>)?;
     container.register_trait(Arc::clone(&db) as Arc<dyn ProductRepository>)?;
     container.register_trait(Arc::clone(&db) as Arc<dyn OrderRepository>)?;
-
-    // Register config repository
-    container.register_trait(FileConfigRepository)?;
 
     Ok(())
 }

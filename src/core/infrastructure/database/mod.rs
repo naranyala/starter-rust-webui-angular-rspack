@@ -10,4 +10,3 @@ pub mod repositories;
 pub mod users;
 
 pub use connection::Database;
-pub use repositories::FileConfigRepository;

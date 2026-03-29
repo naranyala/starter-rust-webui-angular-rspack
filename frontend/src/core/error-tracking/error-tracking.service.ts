@@ -7,7 +7,7 @@
  * @module core/error-tracking
  */
 
-import { Injectable, signal, computed, NgZone } from '@angular/core';
+import { Injectable, signal, computed, NgZone, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { ErrorHandler } from '@angular/core';
 import { Observable, of } from 'rxjs';
@@ -494,11 +494,11 @@ export class ErrorTrackingService {
 
 @Injectable()
 export class TrackingErrorHandler implements ErrorHandler {
-  constructor(private errorTracking: ErrorTrackingService) {}
+  private readonly errorTracking = inject(ErrorTrackingService);
 
   handleError(error: any): void {
     this.errorTracking.captureException(error);
-    
+
     // Re-throw to maintain Angular's default behavior
     throw error;
   }

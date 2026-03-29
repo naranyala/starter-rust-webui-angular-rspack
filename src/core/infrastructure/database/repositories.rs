@@ -1,12 +1,8 @@
 // Repository Trait Implementations
 // Implements domain repository traits for the Database infrastructure
 
-use crate::core::domain::entities::{AppConfig, Order, Product, User};
-use crate::core::domain::traits::{
-    ConfigRepository, OrderRepository, ProductRepository, UserRepository,
-};
+use crate::core::domain::traits::{UserRepository, ProductRepository, OrderRepository};
 use crate::core::error::AppResult;
-use crate::core::infrastructure::config::AppConfig as InfraConfig;
 use crate::core::infrastructure::database::connection::Database;
 
 // ============================================================================
@@ -14,12 +10,28 @@ use crate::core::infrastructure::database::connection::Database;
 // ============================================================================
 
 impl UserRepository for Database {
-    fn get_all(&self) -> AppResult<Vec<User>> {
-        self.get_all_users()
+    fn get_all(&self) -> AppResult<Vec<crate::core::domain::entities::User>> {
+        // Convert from infrastructure models to domain entities
+        let models = self.get_all_users()?;
+        Ok(models.into_iter().map(|m| crate::core::domain::entities::User {
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            role: m.role,
+            status: m.status,
+            created_at: m.created_at,
+        }).collect())
     }
 
-    fn get_by_id(&self, id: i64) -> AppResult<Option<User>> {
-        self.get_user_by_id(id)
+    fn get_by_id(&self, id: i64) -> AppResult<Option<crate::core::domain::entities::User>> {
+        Ok(self.get_user_by_id(id)?.map(|m| crate::core::domain::entities::User {
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            role: m.role,
+            status: m.status,
+            created_at: m.created_at,
+        }))
     }
 
     fn create(&self, name: &str, email: &str, role: &str, status: &str) -> AppResult<i64> {
@@ -53,12 +65,27 @@ impl UserRepository for Database {
 // ============================================================================
 
 impl ProductRepository for Database {
-    fn get_all(&self) -> AppResult<Vec<Product>> {
-        self.get_all_products()
+    fn get_all(&self) -> AppResult<Vec<crate::core::domain::entities::Product>> {
+        let models = self.get_all_products()?;
+        Ok(models.into_iter().map(|m| crate::core::domain::entities::Product {
+            id: m.id,
+            name: m.name,
+            description: m.description,
+            price: m.price,
+            category: m.category,
+            stock: m.stock,
+        }).collect())
     }
 
-    fn get_by_id(&self, id: i64) -> AppResult<Option<Product>> {
-        self.get_product_by_id(id)
+    fn get_by_id(&self, id: i64) -> AppResult<Option<crate::core::domain::entities::Product>> {
+        Ok(self.get_product_by_id(id)?.map(|m| crate::core::domain::entities::Product {
+            id: m.id,
+            name: m.name,
+            description: m.description,
+            price: m.price,
+            category: m.category,
+            stock: m.stock,
+        }))
     }
 
     fn create(
@@ -101,12 +128,29 @@ impl ProductRepository for Database {
 // ============================================================================
 
 impl OrderRepository for Database {
-    fn get_all(&self) -> AppResult<Vec<Order>> {
-        self.get_all_orders()
+    fn get_all(&self) -> AppResult<Vec<crate::core::domain::entities::Order>> {
+        let models = self.get_all_orders()?;
+        Ok(models.into_iter().map(|m| crate::core::domain::entities::Order {
+            id: m.id,
+            user_id: m.user_id,
+            product_id: m.product_id,
+            quantity: m.quantity,
+            total_price: m.total_price,
+            status: m.status,
+            created_at: m.created_at,
+        }).collect())
     }
 
-    fn get_by_id(&self, id: i64) -> AppResult<Option<Order>> {
-        self.get_order_by_id(id)
+    fn get_by_id(&self, id: i64) -> AppResult<Option<crate::core::domain::entities::Order>> {
+        Ok(self.get_order_by_id(id)?.map(|m| crate::core::domain::entities::Order {
+            id: m.id,
+            user_id: m.user_id,
+            product_id: m.product_id,
+            quantity: m.quantity,
+            total_price: m.total_price,
+            status: m.status,
+            created_at: m.created_at,
+        }))
     }
 
     fn create(
@@ -132,33 +176,5 @@ impl OrderRepository for Database {
 
     fn delete(&self, id: i64) -> AppResult<usize> {
         self.delete_order(id)
-    }
-}
-
-// ============================================================================
-// ConfigRepository implementation for Database (uses file system)
-// ============================================================================
-
-pub struct FileConfigRepository;
-
-impl ConfigRepository for FileConfigRepository {
-    fn load(&self) -> AppResult<AppConfig> {
-        let config = InfraConfig::load()?;
-        Ok(AppConfig {
-            app_name: config.get_app_name().to_string(),
-            version: config.get_version().to_string(),
-            window_title: config.get_window_title().to_string(),
-            log_level: config.get_log_level().to_string(),
-            log_file: Some(config.get_log_file().to_string()),
-            append_log: config.is_append_log(),
-            db_path: config.get_db_path().to_string(),
-            create_sample_data: config.should_create_sample_data(),
-        })
-    }
-
-    fn save(&self, config: &AppConfig) -> AppResult<()> {
-        // For now, config is read-only from file
-        // Implementation would write to config file
-        Ok(())
     }
 }

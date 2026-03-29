@@ -7,7 +7,7 @@
  * @module core/update
  */
 
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, from } from 'rxjs';
 import { catchError, map, tap, switchMap } from 'rxjs/operators';
@@ -95,7 +95,9 @@ export class UpdateService {
   readonly hasError = computed(() => this.status() === 'error');
   readonly updateAvailable = computed(() => this.availableUpdate() !== null);
 
-  constructor(private http: HttpClient) {
+  private readonly http = inject(HttpClient);
+
+  constructor() {
     this.loadConfig();
   }
 

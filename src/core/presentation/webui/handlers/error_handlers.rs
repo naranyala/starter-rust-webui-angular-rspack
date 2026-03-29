@@ -3,7 +3,7 @@
 
 use crate::core::error::ErrorCode;
 use crate::core::infrastructure::{database::Database, error_handler};
-use log::info;
+use log::{error, info};
 use std::sync::Arc;
 use webui_rs::webui;
 
@@ -12,13 +12,25 @@ lazy_static::lazy_static! {
 }
 
 pub fn init_database_monitoring(db: Arc<Database>) {
-    let mut instance = DB_INSTANCE.lock().unwrap();
+    let mut instance = match DB_INSTANCE.lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            error!("Failed to acquire DB_INSTANCE lock: {}", e);
+            return;
+        }
+    };
     *instance = Some(db);
     info!("Database monitoring initialized");
 }
 
 fn get_db() -> Option<Arc<Database>> {
-    let instance = DB_INSTANCE.lock().unwrap();
+    let instance = match DB_INSTANCE.lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            error!("Failed to acquire DB_INSTANCE lock: {}", e);
+            return None;
+        }
+    };
     instance.clone()
 }
 

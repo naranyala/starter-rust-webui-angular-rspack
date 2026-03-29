@@ -74,7 +74,7 @@ export interface DataTableConfig {
                 </td>
               </tr>
             } @else {
-              @for (item of filteredItems; track item.id) {
+              @for (item of filteredItems; track $index) {
                 <tr>
                   @for (col of config?.columns || []; track col.key) {
                     <td>
@@ -84,13 +84,13 @@ export interface DataTableConfig {
                           <button class="btn btn--icon btn--delete" (click)="deleteItem(item)">🗑️</button>
                         </div>
                       } @else if (col.type === 'date') {
-                        {{ formatDate(item[col.key]) }}
+                        {{ formatDate($any($any(item)[col.key])) }}
                       } @else if (col.type === 'status') {
-                        <span class="status-badge" [class]="'status-' + item[col.key]">
-                          {{ item[col.key] }}
+                        <span class="status-badge" [class]="'status-' + $any(item)[col.key]">
+                          {{ $any(item)[col.key] }}
                         </span>
                       } @else {
-                        {{ item[col.key] }}
+                        {{ $any(item)[col.key] }}
                       }
                     </td>
                   }
@@ -329,21 +329,26 @@ export interface DataTableConfig {
     }
   `]
 })
-export class DataTableComponent {
+export class DataTableComponent<T extends object = object> {
   private api = inject(ApiService);
   private logger = inject(LoggerService);
 
   @Input() config: DataTableConfig | null = null;
-  @Input() items: any[] = [];
-  @Output() itemsChange = new EventEmitter<any[]>();
+  @Input() items: T[] = [];
+  @Output() itemsChange = new EventEmitter<T[]>();
   @Output() statsChange = new EventEmitter<{ type: string; count: number }>();
 
-  filteredItems: any[] = [];
+  filteredItems: T[] = [];
   searchQuery = '';
   showModal = false;
-  editingItem: any = null;
-  formData: Record<string, any> = {};
+  editingItem: T | null = null;
+  formData: Record<string, unknown> = {};
   isLoading = false;
+
+  // Helper method for type casting in templates
+  $any(value: unknown): any {
+    return value;
+  }
 
   ngOnInit(): void {
     this.filterItems();
@@ -400,7 +405,7 @@ export class DataTableComponent {
     try {
       if (this.editingItem) {
         await this.api.callOrThrow(`update${this.config.entityName}`, [
-          this.editingItem.id,
+          this.$any(this.editingItem).id,
           ...this.config.formFields.map(f => this.formData[f.key])
         ]);
       } else {
