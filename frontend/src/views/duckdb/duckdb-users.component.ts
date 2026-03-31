@@ -1,7 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DataTableComponent, DataTableConfig } from '../shared/data-table.component';
-import { User } from '../../models/duckdb.models';
 
 @Component({
   selector: 'app-duckdb-users',
@@ -16,7 +15,7 @@ import { User } from '../../models/duckdb.models';
   `
 })
 export class DuckdbUsersComponent {
-  @Input() items: User[] = [];
+  @Input() items: any[] = [];
   @Output() statsChange = new EventEmitter<{ type: string; count: number }>();
 
   userConfig: DataTableConfig = {

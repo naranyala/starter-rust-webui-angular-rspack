@@ -10,7 +10,10 @@ target/
 # =============================================================================
 # Node modules
 node_modules/
-**/node_modules/
+
+*/node_modules/*
+*/dist/*
+*/.angular/*
 
 thirdparty/*
 

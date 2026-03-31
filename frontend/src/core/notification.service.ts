@@ -1,63 +1,55 @@
+// Simple notification service
 import { Injectable, signal } from '@angular/core';
 
 export interface Notification {
   id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
   message: string;
   duration?: number;
 }
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class NotificationService {
-  private notifications = signal<Notification[]>([]);
+  private readonly notifications = signal<Notification[]>([]);
 
-  readonly notifications$ = this.notifications.asReadonly();
+  readonly items = this.notifications;
 
-  show(type: Notification['type'], message: string, duration = 3000): void {
-    const id = crypto.randomUUID();
-    const notification: Notification = { id, type, message, duration };
-    this.notifications.update(list => [...list, notification]);
+  show(message: string, type: Notification['type'] = 'info', duration = 3000): void {
+    const notification: Notification = {
+      id: Math.random().toString(36).slice(2),
+      type,
+      message,
+      duration,
+    };
+
+    this.notifications.update(items => [...items, notification]);
 
     if (duration > 0) {
-      setTimeout(() => this.dismiss(id), duration);
+      setTimeout(() => this.dismiss(notification.id), duration);
     }
   }
 
-  success(message: string, duration?: number): void {
-    this.show('success', message, duration);
+  success(message: string, duration = 3000): void {
+    this.show(message, 'success', duration);
   }
 
-  error(message: string, duration?: number): void {
-    this.show('error', message, duration);
+  error(message: string, duration = 5000): void {
+    this.show(message, 'error', duration);
   }
 
-  warning(message: string, duration?: number): void {
-    this.show('warning', message, duration);
+  info(message: string, duration = 3000): void {
+    this.show(message, 'info', duration);
   }
 
-  info(message: string, duration?: number): void {
-    this.show('info', message, duration);
+  warning(message: string, duration = 4000): void {
+    this.show(message, 'warning', duration);
   }
 
   dismiss(id: string): void {
-    this.notifications.update(list => list.filter(n => n.id !== id));
+    this.notifications.update(items => items.filter(n => n.id !== id));
   }
 
   clear(): void {
     this.notifications.set([]);
-  }
-
-  get items(): Notification[] {
-    return this.notifications();
-  }
-
-  getMetrics(): Record<string, number> {
-    const counts = this.notifications().reduce((acc, n) => {
-      acc[n.type] = (acc[n.type] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    return counts;
   }
 }

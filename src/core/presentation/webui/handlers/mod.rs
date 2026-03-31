@@ -1,4 +1,7 @@
+//! WebUI Event Handlers Module
+
 pub mod db_handlers;
+pub mod db_management_handlers;
 pub mod error_handlers;
 pub mod event_bus_handlers;
 pub mod logging_handlers;

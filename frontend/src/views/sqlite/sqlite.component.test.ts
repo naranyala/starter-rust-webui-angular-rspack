@@ -54,8 +54,8 @@ describe('SqliteCrudComponent', () => {
   describe('user filtering', () => {
     it('should filter users by name', () => {
       component.users.set([
-        { id: 1, name: 'John Doe', email: 'john@example.com', age: 30, createdAt: '2024-01-01' },
-        { id: 2, name: 'Jane Smith', email: 'jane@example.com', age: 25, createdAt: '2024-01-02' },
+        { id: 1, name: 'John Doe', email: 'john@example.com', age: 30, created_at: '2024-01-01' },
+        { id: 2, name: 'Jane Smith', email: 'jane@example.com', age: 25, created_at: '2024-01-02' },
       ]);
       
       component.searchQuery = 'john';
@@ -67,8 +67,8 @@ describe('SqliteCrudComponent', () => {
 
     it('should filter users by email', () => {
       component.users.set([
-        { id: 1, name: 'John Doe', email: 'john@example.com', age: 30, createdAt: '2024-01-01' },
-        { id: 2, name: 'Jane Smith', email: 'jane@example.com', age: 25, createdAt: '2024-01-02' },
+        { id: 1, name: 'John Doe', email: 'john@example.com', age: 30, created_at: '2024-01-01' },
+        { id: 2, name: 'Jane Smith', email: 'jane@example.com', age: 25, created_at: '2024-01-02' },
       ]);
       
       component.searchQuery = 'jane@example';
@@ -80,7 +80,7 @@ describe('SqliteCrudComponent', () => {
 
     it('should be case insensitive', () => {
       component.users.set([
-        { id: 1, name: 'John Doe', email: 'john@example.com', age: 30, createdAt: '2024-01-01' },
+        { id: 1, name: 'John Doe', email: 'john@example.com', age: 30, created_at: '2024-01-01' },
       ]);
       
       component.searchQuery = 'JOHN';
@@ -91,8 +91,8 @@ describe('SqliteCrudComponent', () => {
 
     it('should show all users when search is empty', () => {
       component.users.set([
-        { id: 1, name: 'John', email: 'john@example.com', age: 30, createdAt: '2024-01-01' },
-        { id: 2, name: 'Jane', email: 'jane@example.com', age: 25, createdAt: '2024-01-02' },
+        { id: 1, name: 'John', email: 'john@example.com', age: 30, created_at: '2024-01-01' },
+        { id: 2, name: 'Jane', email: 'jane@example.com', age: 25, created_at: '2024-01-02' },
       ]);
       
       component.searchQuery = '';
@@ -144,7 +144,7 @@ describe('SqliteCrudComponent', () => {
 
   describe('delete user', () => {
     it('should set loading state', async () => {
-      const user: User = { id: 1, name: 'Test', email: 'test@example.com', age: 25, createdAt: '2024-01-01' };
+      const user: User = { id: 1, name: 'Test', email: 'test@example.com', age: 25, created_at: '2024-01-01' };
       
       const deletePromise = component.deleteUser(user);
       expect(component.isLoading()).toBe(true);
@@ -156,7 +156,7 @@ describe('SqliteCrudComponent', () => {
 
   describe('edit user', () => {
     it('should populate form with user data', () => {
-      const user: User = { id: 1, name: 'Test User', email: 'test@example.com', age: 30, createdAt: '2024-01-01' };
+      const user: User = { id: 1, name: 'Test User', email: 'test@example.com', age: 30, created_at: '2024-01-01' };
       
       component.editUser(user);
       
@@ -167,7 +167,7 @@ describe('SqliteCrudComponent', () => {
     });
 
     it('should switch to create tab', () => {
-      const user: User = { id: 1, name: 'Test', email: 'test@example.com', age: 25, createdAt: '2024-01-01' };
+      const user: User = { id: 1, name: 'Test', email: 'test@example.com', age: 25, created_at: '2024-01-01' };
       
       component.editUser(user);
       
@@ -189,8 +189,8 @@ describe('SqliteCrudComponent', () => {
   describe('users signal', () => {
     it('should update users reactively', () => {
       const newUsers: User[] = [
-        { id: 1, name: 'User 1', email: 'user1@example.com', age: 25, createdAt: '2024-01-01' },
-        { id: 2, name: 'User 2', email: 'user2@example.com', age: 30, createdAt: '2024-01-02' },
+        { id: 1, name: 'User 1', email: 'user1@example.com', age: 25, created_at: '2024-01-01' },
+        { id: 2, name: 'User 2', email: 'user2@example.com', age: 30, created_at: '2024-01-02' },
       ];
       component.users.set(newUsers);
       

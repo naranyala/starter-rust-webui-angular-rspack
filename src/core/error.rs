@@ -21,6 +21,7 @@ pub enum ErrorCode {
     DbConstraintViolation = 1002,
     DbNotFound = 1003,
     DbAlreadyExists = 1004,
+    DuplicateEntry = 1005,
 
     // Configuration errors (2000-2999)
     ConfigNotFound = 2000,
@@ -58,6 +59,7 @@ impl fmt::Display for ErrorCode {
             ErrorCode::DbConstraintViolation => write!(f, "DB_CONSTRAINT_VIOLATION"),
             ErrorCode::DbNotFound => write!(f, "DB_NOT_FOUND"),
             ErrorCode::DbAlreadyExists => write!(f, "DB_ALREADY_EXISTS"),
+            ErrorCode::DuplicateEntry => write!(f, "DUPLICATE_ENTRY"),
             ErrorCode::ConfigNotFound => write!(f, "CONFIG_NOT_FOUND"),
             ErrorCode::ConfigInvalid => write!(f, "CONFIG_INVALID"),
             ErrorCode::ConfigMissingField => write!(f, "CONFIG_MISSING_FIELD"),
@@ -216,22 +218,6 @@ impl From<rusqlite::Error> for AppError {
         let error_value = ErrorValue::new(ErrorCode::DbQueryFailed, err.to_string())
             .with_cause("SQLite operation failed");
         AppError::Database(error_value)
-    }
-}
-
-impl From<std::io::Error> for AppError {
-    fn from(err: std::io::Error) -> Self {
-        let error_value = ErrorValue::new(ErrorCode::InternalError, err.to_string())
-            .with_cause("I/O operation failed");
-        AppError::Logging(error_value)
-    }
-}
-
-impl From<serde_json::Error> for AppError {
-    fn from(err: serde_json::Error) -> Self {
-        let error_value = ErrorValue::new(ErrorCode::SerializationFailed, err.to_string())
-            .with_cause("JSON serialization failed");
-        AppError::Serialization(error_value)
     }
 }
 

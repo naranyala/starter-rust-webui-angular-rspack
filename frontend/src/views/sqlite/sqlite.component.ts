@@ -9,13 +9,13 @@ export interface User {
   name: string;
   email: string;
   age: number;
-  createdAt: string;
+  created_at: string;
 }
 
 export interface UserStats {
-  totalUsers: number;
-  todayCount: number;
-  uniqueDomains: number;
+  total_users: number;
+  today_count: number;
+  unique_domains: number;
 }
 
 @Component({
@@ -35,15 +35,15 @@ export interface UserStats {
 
         <div class="stats-bar">
           <div class="stat-item">
-            <span class="stat-value">{{ stats().totalUsers }}</span>
+            <span class="stat-value">{{ stats().total_users }}</span>
             <span class="stat-label">Total Users</span>
           </div>
           <div class="stat-item">
-            <span class="stat-value">{{ stats().todayCount }}</span>
+            <span class="stat-value">{{ stats().today_count }}</span>
             <span class="stat-label">Added Today</span>
           </div>
           <div class="stat-item">
-            <span class="stat-value">{{ stats().uniqueDomains }}</span>
+            <span class="stat-value">{{ stats().unique_domains }}</span>
             <span class="stat-label">Email Domains</span>
           </div>
         </div>
@@ -83,7 +83,7 @@ export interface UserStats {
                     <div class="col">{{ user.name }}</div>
                     <div class="col">{{ user.email }}</div>
                     <div class="col">{{ user.age }}</div>
-                    <div class="col">{{ formatDate(user.createdAt) }}</div>
+                    <div class="col">{{ formatDate(user.created_at) }}</div>
                     <div class="col actions">
                       <button class="action-btn edit" (click)="editUser(user)">✏️</button>
                       <button class="action-btn delete" (click)="deleteUser(user)">🗑️</button>
@@ -164,7 +164,7 @@ export class SqliteCrudComponent {
 
   activeTab = signal<'list' | 'create'>('list');
   isLoading = signal(false);
-  stats = signal<UserStats>({ totalUsers: 0, todayCount: 0, uniqueDomains: 0 });
+  stats = signal<UserStats>({ total_users: 0, today_count: 0, unique_domains: 0 });
   users = signal<User[]>([]);
   filteredUsers = signal<User[]>([]);
   searchQuery = '';

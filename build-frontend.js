@@ -158,12 +158,6 @@ async function buildFrontend() {
       }
     }
 
-    // Create required directories
-    await fs.mkdir(rootStaticJs, { recursive: true });
-    await fs.mkdir(rootStaticCss, { recursive: true });
-    await fs.mkdir(path.join(rootDist, 'static', 'js'), { recursive: true });
-    await fs.mkdir(path.join(rootDist, 'static', 'css'), { recursive: true });
-
     process.chdir(frontendDir);
 
     // Step 1: Install dependencies
@@ -178,13 +172,13 @@ async function buildFrontend() {
     }
     logger.endStep(true);
 
-    // Step 2: Build with Angular CLI
-    logger.startStep('angular-build', 'Running Angular build');
+    // Step 2: Build with Rspack
+    logger.startStep('rspack-build', 'Running Rspack build');
     try {
       const buildStart = Date.now();
-      execSync('bun run ng build', { stdio: VERBOSE ? 'inherit' : 'pipe', cwd: frontendDir });
+      execSync('bun run build:rspack', { stdio: VERBOSE ? 'inherit' : 'pipe', cwd: frontendDir });
       const buildDuration = Date.now() - buildStart;
-      logger.stepLog(`Angular build completed in ${buildDuration}ms`);
+      logger.stepLog(`Rspack build completed in ${buildDuration}ms`);
     } catch (buildError) {
       logger.stepLog(`Build failed: ${buildError.message}`, 'ERROR');
       logger.endStep(false, buildError);
@@ -192,136 +186,52 @@ async function buildFrontend() {
     }
     logger.endStep(true);
 
-    // Step 3: Copy assets to project root dist/ and static/
+    // Step 3: Copy Rspack build output to project root dist/
     logger.startStep('copy-assets', 'Copying built assets');
 
-    // Find the Angular build output directory (could be dist/browser or dist/<project-name>/browser)
-    let angularOutputDir = path.join(frontendDir, 'dist', 'browser');
-    if (!(await pathExists(angularOutputDir))) {
-      // Try to find the actual output directory
-      const distContents = await fs.readdir(path.join(frontendDir, 'dist'));
-      for (const entry of distContents) {
-        const candidate = path.join(frontendDir, 'dist', entry, 'browser');
-        if ((await pathExists(candidate)) && entry !== 'browser') {
-          angularOutputDir = candidate;
-          logger.stepLog(`Found Angular output in: dist/${entry}/browser`);
-          break;
-        }
+    // Rspack outputs to frontend/dist/browser/
+    const rspackOutputDir = path.join(frontendDir, 'dist', 'browser');
+    
+    if (!(await pathExists(rspackOutputDir))) {
+      throw new Error(`Rspack output directory not found: ${rspackOutputDir}`);
+    }
+
+    // Remove existing dist if it exists
+    try {
+      await fs.rm(rootDist, { recursive: true, force: true });
+    } catch {}
+
+    // Copy entire browser folder contents to root dist
+    await fs.cp(rspackOutputDir, rootDist, { recursive: true });
+    logger.stepLog(`Copied Rspack output to ${rootDist}`);
+
+    // Also copy to static folders for compatibility
+    await fs.mkdir(rootStaticJs, { recursive: true });
+    await fs.mkdir(rootStaticCss, { recursive: true });
+    
+    // Copy JS files to static/js
+    const jsFiles = (await fs.readdir(rootDist)).filter(f => f.endsWith('.js'));
+    for (const jsFile of jsFiles) {
+      const src = path.join(rootDist, jsFile);
+      const dest = path.join(rootStaticJs, jsFile);
+      await fs.copyFile(src, dest);
+    }
+    logger.stepLog(`Copied ${jsFiles.length} JS files to static/js`);
+    
+    // Copy CSS files to static/css
+    try {
+      const cssFiles = (await fs.readdir(path.join(rootDist, 'styles'))).filter(f => f.endsWith('.css'));
+      await fs.mkdir(path.join(rootStaticCss, 'styles'), { recursive: true });
+      for (const cssFile of cssFiles) {
+        const src = path.join(rootDist, 'styles', cssFile);
+        const dest = path.join(rootStaticCss, 'styles', cssFile);
+        await fs.copyFile(src, dest);
       }
-    }
-    const distStaticJs = path.join(rootDist, 'static', 'js');
-    const distStaticCss = path.join(rootDist, 'static', 'css');
-
-    // Find JS files in Angular output (they have hashed names like main-XXXX.js)
-    const mainJsFiles = (await fs.readdir(angularOutputDir)).filter(f => f.startsWith('main-') && f.endsWith('.js') && !f.endsWith('.map'));
-    const winboxJsFiles = (await fs.readdir(angularOutputDir)).filter(f => f.startsWith('winbox.') && f.endsWith('.js') && !f.endsWith('.map'));
-
-    if (mainJsFiles.length === 0) {
-      throw new Error('No main JS file found in Angular output');
+      logger.stepLog(`Copied ${cssFiles.length} CSS files to static/css`);
+    } catch {
+      logger.stepLog('No separate CSS files found (likely bundled)', 'INFO');
     }
 
-    const mainJsFile = mainJsFiles[0];
-    const winboxJsFile = winboxJsFiles.length > 0 ? winboxJsFiles[0] : null;
-
-    // Copy main JS file
-    const mainSrc = path.join(angularOutputDir, mainJsFile);
-    const mainDestJs = path.join(distStaticJs, 'main.js');
-    const mainDestRootJs = path.join(rootStaticJs, 'main.js');
-    await fs.copyFile(mainSrc, mainDestJs);
-    await fs.copyFile(mainSrc, mainDestRootJs);
-    logger.stepLog(`Copied ${mainJsFile} as main.js`);
-
-    // Copy winbox JS file
-    if (winboxJsFile) {
-      const winboxSrc = path.join(angularOutputDir, winboxJsFile);
-      const winboxDestJs = path.join(distStaticJs, 'winbox.min.js');
-      const winboxDestRootJs = path.join(rootStaticJs, 'winbox.min.js');
-      await fs.copyFile(winboxSrc, winboxDestJs);
-      await fs.copyFile(winboxSrc, winboxDestRootJs);
-      logger.stepLog(`Copied ${winboxJsFile} as winbox.min.js`);
-    }
-    
-    // Copy chunk files (numbered JS files like 319.xxxx.js, 427.xxxx.js, etc.)
-    const chunkFiles = (await fs.readdir(angularOutputDir)).filter(
-      f => /^\d+\.[a-f0-9]+\.js$/.test(f) && !f.endsWith('.map')
-    );
-    
-    for (const chunkFile of chunkFiles) {
-      const src = path.join(angularOutputDir, chunkFile);
-      await fs.copyFile(src, path.join(distStaticJs, chunkFile));
-      await fs.copyFile(src, path.join(rootStaticJs, chunkFile));
-    }
-    if (chunkFiles.length > 0) {
-      logger.stepLog(`Copied ${chunkFiles.length} chunk files`);
-    }
-    
-    // Note: CSS is bundled into JS by Angular, so no separate CSS file to copy
-    
-    // Step 4a: Copy winbox.min.js and winbox.min.css from node_modules
-    logger.startStep('copy-winbox', 'Copying WinBox');
-    const winboxJsSrc = path.join(frontendDir, 'node_modules', 'winbox', 'dist', 'winbox.bundle.min.js');
-    const winboxCssSrc = path.join(frontendDir, 'node_modules', 'winbox', 'dist', 'css', 'winbox.min.css');
-    const winboxJsDest1 = path.join(rootStaticJs, 'winbox.min.js');
-    const winboxJsDest2 = path.join(distStaticJs, 'winbox.min.js');
-    const winboxCssDest1 = path.join(rootStaticCss, 'winbox.min.css');
-    const winboxCssDest2 = path.join(distStaticCss, 'winbox.min.css');
-    
-    if (await pathExists(winboxJsSrc)) {
-      await fs.copyFile(winboxJsSrc, winboxJsDest1);
-      await fs.copyFile(winboxJsSrc, winboxJsDest2);
-      logger.stepLog('Copied winbox.min.js');
-    } else {
-      logger.stepLog('Warning: winbox.min.js not found', 'WARN');
-    }
-    
-    if (await pathExists(winboxCssSrc)) {
-      await fs.copyFile(winboxCssSrc, winboxCssDest1);
-      await fs.copyFile(winboxCssSrc, winboxCssDest2);
-      logger.stepLog('Copied winbox.min.css');
-    } else {
-      logger.stepLog('Warning: winbox.min.css not found', 'WARN');
-    }
-    logger.endStep(true);
-
-    // Step 4b: Copy webui.js
-    logger.startStep('copy-webui', 'Copying WebUI bridge');
-    const webuiSrc = path.join(projectRoot, 'thirdparty', 'webui-c-src', 'bridge', 'webui.js');
-    const webuiDest = path.join(rootStaticJs, 'webui.js');
-    if (await pathExists(webuiSrc)) {
-      await fs.copyFile(webuiSrc, webuiDest);
-      await fs.copyFile(webuiSrc, path.join(distStaticJs, 'webui.js'));
-      logger.stepLog('Copied webui.js');
-    } else {
-      logger.stepLog('Warning: webui.js not found at ' + webuiSrc, 'WARN');
-    }
-    logger.endStep(true);
-
-    // Step 5: Create index.html
-    logger.startStep('update-html', 'Creating dist/index.html');
-    
-    const rootIndexHtml = path.join(rootDist, 'index.html');
-    
-    // Create a minimal host page for Angular app shell
-    const htmlContent = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Rust WebUI Application</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="./static/css/winbox.min.css">
-</head>
-<body>
-  <app-root></app-root>
-
-  <!-- WinBox must be loaded before main.js -->
-  <script src="./static/js/winbox.min.js"></script>
-  <script src="./static/js/webui.js"></script>
-  <script src="./static/js/main.js"></script>
-</body>
-</html>`;
-    
-    await fs.writeFile(rootIndexHtml, htmlContent);
-    logger.stepLog('Created dist/index.html');
     logger.endStep(true);
 
     logger.success('Frontend build completed!');

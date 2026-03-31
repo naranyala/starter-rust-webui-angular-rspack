@@ -215,19 +215,24 @@ fn main() {
                 return;
             }
             if config.should_create_sample_data() {
-                // Seed sample users
-                if let Err(e) = db.insert_sample_data() {
-                    error_handler::record_app_error("MAIN", &e);
+                // Seed sample users (only if database is empty)
+                if let Ok(inserted) = db.insert_sample_data_if_empty() {
+                    if inserted {
+                        info!("Sample users created");
+                    }
                 }
-                // Seed sample products
-                if let Err(e) = db.insert_sample_products() {
-                    error_handler::record_app_error("MAIN", &e);
+                // Seed sample products (only if database is empty)
+                if let Ok(inserted) = db.insert_sample_products_if_empty() {
+                    if inserted {
+                        info!("Sample products created");
+                    }
                 }
-                // Seed sample orders
-                if let Err(e) = db.insert_sample_orders() {
-                    error_handler::record_app_error("MAIN", &e);
+                // Seed sample orders (only if database is empty)
+                if let Ok(inserted) = db.insert_sample_orders_if_empty() {
+                    if inserted {
+                        info!("Sample orders created");
+                    }
                 }
-                info!("Sample data created (users, products, orders)");
             }
             // Log pool stats
             let stats = db.pool_stats();
@@ -257,6 +262,13 @@ fn main() {
     // Initialize database handlers with the database instance
     presentation::db_handlers::init_database(Arc::clone(&db));
     presentation::error_handlers::init_database_monitoring(Arc::clone(&db));
+    
+    // Initialize database management handlers (backup, restore, integrity)
+    let db_path_for_management = config.get_db_path().to_string();
+    presentation::db_management_handlers::init_database_management(
+        Arc::clone(&db),
+        db_path_for_management,
+    );
 
     // Create a new window
     let mut my_window = webui::Window::new();
@@ -281,6 +293,7 @@ fn main() {
     presentation::ui_handlers::setup_ui_handlers(&mut my_window);
     presentation::ui_handlers::setup_counter_handlers(&mut my_window);
     presentation::db_handlers::setup_db_handlers(&mut my_window);
+    presentation::db_management_handlers::setup_db_management_handlers(&mut my_window);
     presentation::sysinfo_handlers::setup_sysinfo_handlers(&mut my_window);
     presentation::logging_handlers::setup_logging_handlers(&mut my_window);
     presentation::event_bus_handlers::setup_event_bus_handlers(&mut my_window);

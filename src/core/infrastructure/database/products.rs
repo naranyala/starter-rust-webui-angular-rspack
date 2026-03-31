@@ -1,7 +1,9 @@
 // src/core/infrastructure/database/products.rs
 // Product-specific database operations with connection pooling
 
-use rusqlite::OptionalExtension;
+use chrono::Local;
+use log::{error, info};
+use rusqlite::{params, OptionalExtension};
 
 use super::connection::Database;
 use super::models::Product;
@@ -53,7 +55,7 @@ impl Database {
         })
     }
 
-    /// Insert a new product
+    /// Insert a new product with validation
     pub fn insert_product(
         &self,
         name: &str,
@@ -62,17 +64,72 @@ impl Database {
         category: &str,
         stock: i64,
     ) -> DbResult<i64> {
+        // Validate product name
         if name.is_empty() {
             return Err(AppError::Validation(
                 ErrorValue::new(ErrorCode::MissingRequiredField, "Product name is required")
                     .with_field("name"),
             ));
         }
+        
+        // Validate name length (max 200 characters)
+        if name.len() > 200 {
+            return Err(AppError::Validation(
+                ErrorValue::new(ErrorCode::ValidationFailed, "Product name must be less than 200 characters")
+                    .with_field("name")
+                    .with_context("max_length", "200"),
+            ));
+        }
 
+        // Validate price
         if price <= 0.0 {
             return Err(AppError::Validation(
                 ErrorValue::new(ErrorCode::InvalidFieldValue, "Price must be greater than 0")
                     .with_field("price"),
+            ));
+        }
+        
+        // Validate price max value (prevent overflow)
+        if price > 1_000_000.0 {
+            return Err(AppError::Validation(
+                ErrorValue::new(ErrorCode::InvalidFieldValue, "Price must be less than 1,000,000")
+                    .with_field("price")
+                    .with_context("max_value", "1000000"),
+            ));
+        }
+
+        // Validate description length (max 1000 characters)
+        if description.len() > 1000 {
+            return Err(AppError::Validation(
+                ErrorValue::new(ErrorCode::ValidationFailed, "Description must be less than 1000 characters")
+                    .with_field("description")
+                    .with_context("max_length", "1000"),
+            ));
+        }
+
+        // Validate category length (max 50 characters)
+        if category.len() > 50 {
+            return Err(AppError::Validation(
+                ErrorValue::new(ErrorCode::ValidationFailed, "Category must be less than 50 characters")
+                    .with_field("category")
+                    .with_context("max_length", "50"),
+            ));
+        }
+
+        // Validate stock (non-negative)
+        if stock < 0 {
+            return Err(AppError::Validation(
+                ErrorValue::new(ErrorCode::InvalidFieldValue, "Stock cannot be negative")
+                    .with_field("stock"),
+            ));
+        }
+        
+        // Validate stock max value (reasonable limit)
+        if stock > 1_000_000 {
+            return Err(AppError::Validation(
+                ErrorValue::new(ErrorCode::InvalidFieldValue, "Stock must be less than 1,000,000")
+                    .with_field("stock")
+                    .with_context("max_value", "1000000"),
             ));
         }
 
@@ -342,26 +399,39 @@ impl Database {
         Ok(())
     }
 
-    /// Insert sample products data
-    pub fn insert_sample_products(&self) -> DbResult<()> {
+    /// Insert sample products only if database is empty
+    ///
+    /// This ensures data persistence - sample data is only added on first run.
+    /// Users must explicitly delete data through the UI.
+    pub fn insert_sample_products_if_empty(&self) -> DbResult<bool> {
+        // Check if database has any products
+        let existing_count = self.get_product_count()?;
+        
+        if existing_count > 0 {
+            info!("Database already has {} products, skipping sample data insertion", existing_count);
+            return Ok(false); // Sample data not inserted (already has data)
+        }
+
+        info!("Database is empty, inserting sample products...");
+        
         let sample_products = [
             (
                 "Laptop Pro 15",
-                "High-performance laptop with 16GB RAM",
+                "High-performance laptop with 16GB RAM and 512GB SSD",
                 1299.99,
                 "Electronics",
                 50,
             ),
             (
                 "Wireless Mouse",
-                "Ergonomic wireless mouse",
+                "Ergonomic wireless mouse with long battery life",
                 49.99,
                 "Electronics",
                 200,
             ),
             (
                 "USB-C Hub",
-                "7-in-1 USB-C hub with HDMI",
+                "7-in-1 USB-C hub with HDMI and card reader",
                 79.99,
                 "Electronics",
                 150,
@@ -375,14 +445,14 @@ impl Database {
             ),
             (
                 "Standing Desk",
-                "Electric height-adjustable desk",
+                "Electric height-adjustable standing desk",
                 599.99,
                 "Furniture",
                 20,
             ),
             (
                 "Notebook Set",
-                "Pack of 5 premium notebooks",
+                "Pack of 5 premium notebooks, ruled pages",
                 24.99,
                 "Office Supplies",
                 500,
@@ -396,14 +466,14 @@ impl Database {
             ),
             (
                 "Coffee Maker",
-                "Automatic drip coffee maker",
+                "Automatic drip coffee maker with timer",
                 89.99,
                 "Appliances",
                 75,
             ),
             (
                 "Water Bottle",
-                "Insulated stainless steel bottle",
+                "Insulated stainless steel water bottle, 32oz",
                 29.99,
                 "Accessories",
                 400,
@@ -419,22 +489,58 @@ impl Database {
 
         for (name, description, price, category, stock) in sample_products {
             // Check if product exists by name
-            let conn = self.get_conn()?;
-            let exists: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM products WHERE name = ?",
-                    [name],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-
-            if exists == 0 {
-                drop(conn); // Release connection before insert
+            let product_exists: Result<Option<Product>, AppError> = self.get_product_by_name(name);
+            let exists = match product_exists {
+                Ok(Some(_)) => true,
+                Ok(None) | Err(_) => false,
+            };
+            
+            if !exists {
                 let _ = self.insert_product(name, description, price, category, stock)?;
+                info!("Inserted sample product: {}", name);
             }
         }
 
+        info!("Sample products insertion complete");
+        Ok(true) // Sample data was inserted
+    }
+
+    /// Insert sample products (deprecated - use insert_sample_products_if_empty instead)
+    #[deprecated(note = "Use insert_sample_products_if_empty to ensure data persistence")]
+    pub fn insert_sample_products(&self) -> DbResult<()> {
+        self.insert_sample_products_if_empty()?;
         Ok(())
+    }
+
+    /// Get product by name
+    pub fn get_product_by_name(&self, name: &str) -> DbResult<Option<Product>> {
+        let conn = self.get_conn()?;
+        
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, description, price, category, stock FROM products WHERE name = ?",
+            )
+            .map_err(|e| {
+                AppError::Database(
+                    ErrorValue::new(ErrorCode::DbQueryFailed, "Failed to prepare product query")
+                        .with_cause(e.to_string()),
+                )
+            })?;
+
+        let product = stmt
+            .query_row([name], |row| {
+                Ok(Product {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    price: row.get(3)?,
+                    category: row.get(4)?,
+                    stock: row.get(5)?,
+                })
+            })
+            .optional()?;
+
+        Ok(product)
     }
 
     /// Get product count

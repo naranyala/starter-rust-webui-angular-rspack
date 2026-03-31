@@ -1,13 +1,13 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { DashboardComponent } from './dashboard/dashboard.component';
-import { LoggerService } from '../core/logger.service';
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterOutlet, RouterModule } from '@angular/router';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [DashboardComponent],
+  imports: [CommonModule, RouterOutlet, RouterModule],
   template: `
-    <app-dashboard />
+    <router-outlet />
   `,
   styles: [`
     :host {
@@ -20,9 +20,7 @@ import { LoggerService } from '../core/logger.service';
   `]
 })
 export class AppComponent implements OnInit {
-  private readonly logger = inject(LoggerService);
-
   ngOnInit(): void {
-    this.logger.info('DuckDB Dashboard Application Initialized');
+    console.log('Application Initialized');
   }
 }

@@ -5,7 +5,7 @@
  * and Odin backend through WebUI library.
  */
 
-import { Injectable, NgZone, inject } from '@angular/core';
+import { Injectable, NgZone } from '@angular/core';
 
 export interface WebUIEvent {
   type: string;
@@ -22,7 +22,6 @@ export interface WebUIResponse<T = any> {
   providedIn: 'root',
 })
 export class WebUIService {
-  private readonly ngZone = inject(NgZone);
   private isWebUIAvailable = false;
   private eventListeners = new Map<string, Set<(data: any) => void>>();
   private pendingRequests = new Map<number, {
@@ -32,7 +31,7 @@ export class WebUIService {
   }>();
   private requestIdCounter = 0;
 
-  constructor() {
+  constructor(private ngZone: NgZone) {
     this.checkAvailability();
   }
 

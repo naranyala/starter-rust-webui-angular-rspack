@@ -226,3 +226,59 @@ pub struct DatabaseStats {
     pub orders_count: i64,
     pub total_revenue: f64,
 }
+
+/// User statistics structure
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UserStats {
+    pub total_users: i64,
+    pub active_users: i64,
+    pub admin_users: i64,
+    pub today_count: i64,
+}
+
+/// Category statistics structure
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryStats {
+    pub category: String,
+    pub product_count: i64,
+    pub avg_price: f64,
+    pub total_stock: i64,
+    pub min_price: f64,
+    pub max_price: f64,
+    #[serde(skip)]
+    pub total_price: f64, // Helper field for calculation, not serialized
+}
+
+/// Sales trend data structure
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SalesTrend {
+    pub date: String,
+    pub order_count: i64,
+    pub total_quantity: i64,
+    pub total_revenue: f64,
+    pub avg_order_value: f64,
+}
+
+/// Product statistics structure
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductStats {
+    pub id: i64,
+    pub name: String,
+    pub category: String,
+    pub order_count: i64,
+    pub total_sold: i64,
+    pub total_revenue: f64,
+}
+
+/// Revenue data structure
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RevenueData {
+    pub period: String,
+    pub revenue: f64,
+    pub transactions: i64,
+}

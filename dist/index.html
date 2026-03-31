@@ -1,17 +1,41 @@
 <!doctype html>
-<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Rust WebUI Application</title>
+  <base href="./">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="./static/css/winbox.min.css">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    app-root {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    /* Loading state */
+    app-root:empty::after {
+      content: 'Loading...';
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: sans-serif;
+      font-size: 18px;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
+  <script>
+    document.body.style.backgroundColor = '#0f172a';
+  </script>
+  <div id="angular-error-container"></div>
   <app-root></app-root>
-
-  <!-- WinBox must be loaded before main.js -->
-  <script src="./static/js/winbox.min.js"></script>
-  <script src="./static/js/webui.js"></script>
-  <script src="./static/js/main.js"></script>
-</body>
+<script defer src="/runtime.a130e3a9f36286f7.js"></script><script defer src="/zone.8b043d471c0e9de2.js"></script><script defer src="/angular-0.e1e65004fb37468b.js"></script><script defer src="/angular-330008ec.8bdc2c983f4294ec.js"></script><script defer src="/angular-2.c7ff7e0a605dfc53.js"></script><script defer src="/angular-e7f77611.bc0641ec7f668d17.js"></script><script defer src="/angular-4.aedac12949f8ceda.js"></script><script defer src="/angular-5.fed8c2fa6bc25a11.js"></script><script defer src="/angular-6.67a446d23282c237.js"></script><script defer src="/angular-7.7b473510e89d667a.js"></script><script defer src="/vendor-0.3ded978a2b12c2a5.js"></script><script defer src="/vendor-1.12e64aa45754d658.js"></script><script defer src="/vendor-2.b95cd0d40d5d9721.js"></script><script defer src="/vendor-3.d62767815c1e8361.js"></script><script defer src="/vendor-4.da58e9dd1048ca3c.js"></script><script defer src="/vendor-5.6b1d4dfc01d7a98e.js"></script><script defer src="/vendor-6.1bb76c63bde67ed4.js"></script><script defer src="/vendor-7.8d266b72d42c2a71.js"></script><script defer src="/vendor-8.be4162a7e8536a0a.js"></script><script defer src="/vendor-9.aa1e86e8f30152ab.js"></script><script defer src="/vendor-10.505eb26d6f24e925.js"></script><script defer src="/vendor-3baae6d9.f9f1fc6a2d939d66.js"></script><script defer src="/vendor-12.e02522837b8dc335.js"></script><script defer src="/vendor-13.b65e908244552afa.js"></script><script defer src="/vendor-14.a0bbe2768f6b6d2d.js"></script><script defer src="/main~0.19deeeb946a12b83.js"></script><script defer src="/main~1.095829a13f2d6760.js"></script><script defer src="/main~2.6ed5f125977b4845.js"></script><script defer src="/main~3.a5724ba3a1044bc8.js"></script></body>
 </html>

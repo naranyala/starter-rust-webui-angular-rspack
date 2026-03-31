@@ -7,12 +7,21 @@
 import { Component, signal, inject, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { MarkdownModule } from 'ngx-markdown';
 import { LoggerService } from '../../core/logger.service';
 import { ApiService } from '../../core/api.service';
 import { DuckdbUsersComponent } from '../duckdb/duckdb-users.component';
 import { DuckdbProductsComponent } from '../duckdb/duckdb-products.component';
 import { DuckdbOrdersComponent } from '../duckdb/duckdb-orders.component';
+import { DemoSqliteCrudComponent } from '../demo/demo-sqlite-crud.component';
+import { DemoDuckdbCrudComponent } from '../demo/demo-duckdb-crud.component';
+import { DuckdbExplorationComponent } from '../demo/duckdb-exploration.component';
+import { SqliteExplorationComponent } from '../demo/sqlite-exploration.component';
+import { DbComparisonDemoComponent } from '../demo/db-comparison-demo.component';
+import { DataMigrationDemoComponent } from '../demo/data-migration-demo.component';
+import { RealtimeSyncDemoComponent } from '../demo/realtime-sync-demo.component';
+import { VegaChartsDemoComponent } from '../charts/vega-charts-demo.component';
 
 export interface DashboardStats {
   totalUsers: number;
@@ -39,6 +48,14 @@ export interface NavItem {
     DuckdbUsersComponent,
     DuckdbProductsComponent,
     DuckdbOrdersComponent,
+    DemoSqliteCrudComponent,
+    DemoDuckdbCrudComponent,
+    DuckdbExplorationComponent,
+    SqliteExplorationComponent,
+    DbComparisonDemoComponent,
+    DataMigrationDemoComponent,
+    RealtimeSyncDemoComponent,
+    VegaChartsDemoComponent,
   ],
   template: `
     <div class="dashboard-container">
@@ -87,6 +104,28 @@ export interface NavItem {
             </div>
           }
         </div>
+
+        <!-- Charts Section -->
+        <div class="pill-section">
+          <button class="section-header" (click)="toggleChartSection()">
+            <span class="section-title">Charts</span>
+            <span class="section-toggle">{{ chartOpen() ? '▼' : '▶' }}</span>
+          </button>
+          @if (chartOpen()) {
+            <div class="pill-container">
+              @for (item of chartItems(); track item.id) {
+                <button
+                  class="dot-pill"
+                  [class.active]="activeView() === item.id"
+                  (click)="onNavClick(item.id)"
+                >
+                  <span class="pill-dot"></span>
+                  <span class="pill-text">{{ item.label }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
       </aside>
 
       <!-- Second Panel: Content -->
@@ -99,16 +138,32 @@ export interface NavItem {
 
         <!-- Content Area -->
         <div class="content-area" #contentArea>
-          @if (activeView() === 'demo_duckdb') {
-            <app-duckdb-users [items]="users()" (statsChange)="onStatsUpdate($event)"></app-duckdb-users>
+          @if (activeView() === 'demo_sqlite_crud') {
+            <app-demo-sqlite-crud />
+          } @else if (activeView() === 'demo_duckdb_crud') {
+            <app-demo-duckdb-crud />
+          } @else if (activeView() === 'demo_sqlite_exploration') {
+            <app-sqlite-exploration />
+          } @else if (activeView() === 'demo_duckdb_exploration') {
+            <app-duckdb-exploration />
+          } @else if (activeView() === 'demo_db_comparison') {
+            <app-db-comparison-demo />
+          } @else if (activeView() === 'demo_data_migration') {
+            <app-data-migration-demo />
+          } @else if (activeView() === 'demo_realtime_sync') {
+            <app-realtime-sync-demo />
+          } @else if (activeView() === 'demo_vega_charts') {
+            <app-vega-charts-demo />
+          } @else if (activeView() === 'demo_duckdb') {
+            <app-duckdb-users [items]="users()" (statsChange)="onStatsUpdate($any($event))"></app-duckdb-users>
           } @else if (activeView() === 'demo_sqlite') {
-            <app-duckdb-products [items]="products()" (statsChange)="onStatsUpdate($event)"></app-duckdb-products>
+            <app-duckdb-products [items]="products()" (statsChange)="onStatsUpdate($any($event))"></app-duckdb-products>
           } @else if (activeView() === 'demo_websocket') {
-            <app-duckdb-orders [items]="orders()" (statsChange)="onStatsUpdate($event)"></app-duckdb-orders>
+            <app-duckdb-orders [items]="orders()" (statsChange)="onStatsUpdate($any($event))"></app-duckdb-orders>
           } @else {
-            <markdown 
-              [src]="currentMarkdownPath()" 
-              (load)="onMarkdownLoad($event)" 
+            <markdown
+              [src]="currentMarkdownPath()"
+              (load)="onMarkdownLoad($event)"
               (error)="onMarkdownError($event)">
             </markdown>
           }
@@ -590,6 +645,7 @@ export class DashboardComponent implements OnInit {
   private readonly logger = inject(LoggerService);
   private readonly http = inject(HttpClient);
   private readonly api = inject(ApiService);
+  private readonly router = inject(Router);
 
   @ViewChild('contentArea') contentArea!: ElementRef<HTMLElement>;
 
@@ -604,29 +660,30 @@ export class DashboardComponent implements OnInit {
 
   docsOpen = signal(true);
   demoOpen = signal(true);
+  chartOpen = signal(true);
 
   docItems = signal<NavItem[]>([
-    { id: 'INDEX', label: 'Overview', icon: '📖', active: true },
-    { id: '00-GETTING_STARTED', label: 'Getting Started', icon: '🚀', active: false },
-    { id: '01-ARCHITECTURE', label: 'Architecture', icon: '🏗️', active: false },
-    { id: '01-CRUD-DEMOS', label: 'CRUD Demos', icon: '📋', active: false },
-    { id: '02-API_REFERENCE', label: 'API Reference', icon: '📚', active: false },
-    { id: '03-SECURITY', label: 'Security', icon: '🔒', active: false },
-    { id: '04-DEVELOPMENT', label: 'Development', icon: '🛠️', active: false },
-    { id: '05-DEPLOYMENT', label: 'Deployment', icon: '📦', active: false },
+    { id: 'docs_home', label: '📚 All Docs', icon: '📚', active: true },
+    { id: 'DUCKDB_CRUD_INTEGRATION', label: 'DuckDB CRUD Guide', icon: '🦆', active: false },
+    { id: 'SQLITE_CRUD_INTEGRATION', label: 'SQLite CRUD Guide', icon: '🗄️', active: false },
   ]);
 
   demoItems = signal<NavItem[]>([
-    { id: 'demo_duckdb', label: 'DuckDB', icon: '🦆', active: false },
-    { id: 'demo_sqlite', label: 'SQLite', icon: '🗃️', active: false },
-    { id: 'demo_websocket', label: 'WebSocket', icon: '🔌', active: false },
-    { id: 'demo_chart', label: 'Charts', icon: '📊', active: false },
-    { id: 'demo_pdf', label: 'PDF Viewer', icon: '📄', active: false },
-    { id: 'demo_maps', label: 'Maps', icon: '🗺️', active: false },
+    { id: 'demo_sqlite_crud', label: '🗄️ SQLite CRUD', icon: '🗄️', active: false },
+    { id: 'demo_sqlite_exploration', label: '🗄️ SQLite Exploration', icon: '🔍', active: false },
+    { id: 'demo_duckdb_crud', label: '🦆 DuckDB CRUD', icon: '🦆', active: false },
+    { id: 'demo_duckdb_exploration', label: '🦆 DuckDB Exploration', icon: '🔬', active: false },
+    { id: 'demo_db_comparison', label: '⚖️ DB Comparison', icon: '⚖️', active: false },
+    { id: 'demo_data_migration', label: '🔄 Data Migration', icon: '🔄', active: false },
+    { id: 'demo_realtime_sync', label: '🔌 Real-Time Sync', icon: '🔌', active: false },
   ]);
 
-  currentPageTitle = signal('Documentation');
-  currentMarkdownPath = signal('docs/INDEX.md');
+  chartItems = signal<NavItem[]>([
+    { id: 'demo_vega_charts', label: '📊 Vega Charts', icon: '📊', active: false },
+  ]);
+
+  currentPageTitle = signal('Overview');
+  currentMarkdownPath = signal('assets/docs/README.md');
   stats = signal({
     totalUsers: 0,
     totalProducts: 0,
@@ -679,27 +736,34 @@ export class DashboardComponent implements OnInit {
     this.activeView.set(viewId);
     const docItem = this.docItems().find(i => i.id === viewId);
     const demoItem = this.demoItems().find(i => i.id === viewId);
-    const item = docItem || demoItem;
+    const chartItem = this.chartItems().find(i => i.id === viewId);
+    const item = docItem || demoItem || chartItem;
     this.currentPageTitle.set(item ? item.label : viewId);
-
+    
     if (viewId.startsWith('demo_')) {
       this.currentMarkdownPath.set('');
     } else {
-      // Point to docs folder for documentation files
-      this.currentMarkdownPath.set(`docs/${viewId}.md`);
+      const path = viewId.includes('_') && !viewId.startsWith('demo_')
+        ? `assets/docs/${viewId.replace('_', '/')}.md`
+        : `assets/docs/${viewId}.md`;
+      this.currentMarkdownPath.set(path);
     }
-
+    
     // On mobile, show content panel
     if (this.isMobileView()) {
       this.showContent.set(true);
     }
-
+    
     if (this.contentArea) {
       this.contentArea.nativeElement.scrollTop = 0;
     }
   }
 
   onNavClick(viewId: string): void {
+    if (viewId === 'docs_home') {
+      this.router.navigate(['/docs']);
+      return;
+    }
     this.setActiveView(viewId);
   }
 
@@ -709,6 +773,10 @@ export class DashboardComponent implements OnInit {
 
   toggleDemoSection(): void {
     this.demoOpen.update(v => !v);
+  }
+
+  toggleChartSection(): void {
+    this.chartOpen.update(v => !v);
   }
 
   onMarkdownLoad(event: any): void {

@@ -2,6 +2,7 @@
 // Order-specific database operations with connection pooling
 
 use chrono::Local;
+use log::{error, info};
 use rusqlite::OptionalExtension;
 
 use super::connection::Database;
@@ -443,8 +444,21 @@ impl Database {
         Ok(count)
     }
 
-    /// Insert sample orders data
-    pub fn insert_sample_orders(&self) -> DbResult<()> {
+    /// Insert sample orders only if database is empty
+    ///
+    /// This ensures data persistence - sample data is only added on first run.
+    /// Users must explicitly delete data through the UI.
+    pub fn insert_sample_orders_if_empty(&self) -> DbResult<bool> {
+        // Check if database has any orders
+        let existing_count = self.get_order_count()?;
+        
+        if existing_count > 0 {
+            info!("Database already has {} orders, skipping sample data insertion", existing_count);
+            return Ok(false); // Sample data not inserted (already has data)
+        }
+
+        info!("Database is empty, inserting sample orders...");
+        
         // Get existing user and product IDs for sample orders
         let conn = self.get_conn()?;
 
@@ -463,18 +477,30 @@ impl Database {
             .flatten();
 
         if let (Some(uid), Some(pid)) = (user_id, product_id) {
-            // Check if orders already exist
-            let order_count: i64 = conn
-                .query_row("SELECT COUNT(*) FROM orders", [], |row| row.get(0))
-                .unwrap_or(0);
+            let sample_orders = [
+                (uid, pid, 2, 99.98, "Completed"),
+                (uid, pid, 1, 49.99, "Pending"),
+                (uid, pid, 3, 149.97, "Processing"),
+                (uid, pid, 1, 1299.99, "Completed"),
+                (uid, pid, 5, 249.95, "Shipped"),
+            ];
 
-            if order_count == 0 {
-                let _ = self.insert_order(uid, pid, 2, 99.98, "Completed");
-                let _ = self.insert_order(uid, pid, 1, 49.99, "Pending");
-                let _ = self.insert_order(uid, pid, 3, 149.97, "Processing");
+            for (user_id, product_id, quantity, total_price, status) in sample_orders {
+                let _ = self.insert_order(user_id, product_id, quantity, total_price, status);
             }
+            
+            info!("Sample orders insertion complete");
+            return Ok(true);
         }
 
+        info!("Cannot insert sample orders: missing users or products");
+        Ok(false)
+    }
+
+    /// Insert sample orders (deprecated - use insert_sample_orders_if_empty instead)
+    #[deprecated(note = "Use insert_sample_orders_if_empty to ensure data persistence")]
+    pub fn insert_sample_orders(&self) -> DbResult<()> {
+        self.insert_sample_orders_if_empty()?;
         Ok(())
     }
 

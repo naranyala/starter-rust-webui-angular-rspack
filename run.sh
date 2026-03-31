@@ -90,9 +90,6 @@ build_frontend() {
     # Check required files in root dist/ (the actual runtime output)
     local required_files=(
         "dist/index.html"
-        "dist/static/js/main.js"
-        "dist/static/js/webui.js"
-        "dist/static/css/winbox.min.css"
     )
     local missing=0
     for f in "${required_files[@]}"; do

@@ -1,14 +1,13 @@
 /**
  * WebUI Demo Component
- *
+ * 
  * Demonstrates Angular <-> Odin backend communication via WebUI
  */
 
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { WebUIService } from './webui.service';
-import { LoggerService } from '../../core/logger.service';
 
 @Component({
   selector: 'app-webui-demo',
@@ -264,10 +263,10 @@ export class WebUIDemoComponent implements OnInit, OnDestroy {
   greetingResponse = '';
   counterValue = 0;
   messages: Array<{ time: Date; text: string; type?: 'info' | 'error' }> = [];
-
-  private readonly logger = inject(LoggerService);
-  private readonly webuiService = inject(WebUIService);
+  
   private backendUnsubscribe?: () => void;
+
+  constructor(private webuiService: WebUIService) {}
 
   ngOnInit(): void {
     this.webuiAvailable = this.webuiService.isAvailable();
@@ -303,7 +302,7 @@ export class WebUIDemoComponent implements OnInit, OnDestroy {
         this.addMessage(`Greeting sent: ${this.name}`);
       }
     } catch (error) {
-      this.logger.error('Error sending greeting', error as Error);
+      console.error('Error sending greeting:', error);
       this.greetingResponse = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
       this.addMessage('Failed to send greeting', 'error');
     } finally {

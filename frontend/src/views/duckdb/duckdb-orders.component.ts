@@ -1,7 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DataTableComponent, DataTableConfig } from '../shared/data-table.component';
-import { Order } from '../../models/duckdb.models';
 
 @Component({
   selector: 'app-duckdb-orders',
@@ -16,7 +15,7 @@ import { Order } from '../../models/duckdb.models';
   `
 })
 export class DuckdbOrdersComponent {
-  @Input() items: Order[] = [];
+  @Input() items: any[] = [];
   @Output() statsChange = new EventEmitter<{ type: string; count: number }>();
 
   orderConfig: DataTableConfig = {
