@@ -1,9 +1,11 @@
-// Core Services - Consolidated
-// Essential services for frontend-backend communication
+// Core Services - Organized by responsibility
 
-// Communication
+// Communication layer
 export { ApiService } from './api.service';
 export { CommunicationService } from './communication.service';
+export { EventBusService } from './event-bus.service';
+export { SharedStateService } from './shared-state.service';
+export { MessageQueueService } from './message-queue.service';
 export { WebUIBridgeService } from './webui/webui-bridge.service';
 
 // Utilities

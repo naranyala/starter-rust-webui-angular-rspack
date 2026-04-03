@@ -1,5 +1,5 @@
-// src/core/infrastructure/mod.rs
-// Infrastructure services - database, config, logging, DI, event bus, error handling
+// Infrastructure services — pure plumbing (logging, error tracking, event bus, config, ctrlc).
+// Business logic lives in core/services/.
 
 pub mod config;
 pub mod ctrlc_handler;

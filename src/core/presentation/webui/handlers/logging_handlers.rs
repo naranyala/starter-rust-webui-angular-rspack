@@ -1,7 +1,6 @@
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
-use std::ffi::CStr;
-use webui_rs::webui::bindgen::webui_interface_get_string_at;
+use crate::core::presentation::webui::handler_utils;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct FrontendLogEntry {
@@ -17,17 +16,9 @@ pub struct FrontendLogEntry {
     pub frontend_timestamp: String,
 }
 
-fn read_event_payload(event: &webui_rs::webui::Event) -> Option<String> {
-    let ptr = unsafe { webui_interface_get_string_at(event.window, event.event_number, 0) };
-    if ptr.is_null() {
-        return None;
-    }
-    Some(unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() })
-}
-
 pub fn setup_logging_handlers(window: &mut webui_rs::webui::Window) {
     window.bind("log_message", |event| {
-        let data = match read_event_payload(&event) {
+        let data = match handler_utils::read_event_payload(&event) {
             Some(payload) => payload,
             None => {
                 error!("log_message missing payload");

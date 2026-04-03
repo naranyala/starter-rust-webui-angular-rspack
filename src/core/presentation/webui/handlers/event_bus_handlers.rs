@@ -1,8 +1,7 @@
 use crate::core::infrastructure::event_bus::{EventData, GLOBAL_EVENT_BUS};
+use crate::core::presentation::webui::handler_utils;
 use log::info;
 use serde::{Deserialize, Serialize};
-use std::ffi::CStr;
-use webui_rs::webui::bindgen::webui_interface_get_string_at;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EventPublishRequest {
@@ -23,14 +22,6 @@ pub struct EventHistoryResponse {
     pub count: usize,
 }
 
-fn read_event_payload(event: &webui_rs::webui::Event) -> Option<String> {
-    let ptr = unsafe { webui_interface_get_string_at(event.window, event.event_number, 0) };
-    if ptr.is_null() {
-        return None;
-    }
-    Some(unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() })
-}
-
 fn send_response(window: webui_rs::webui::Window, response: &str) {
     let js = format!(
         "window.dispatchEvent(new CustomEvent('event_response', {{ detail: {} }}))",
@@ -41,7 +32,7 @@ fn send_response(window: webui_rs::webui::Window, response: &str) {
 
 pub fn setup_event_bus_handlers(window: &mut webui_rs::webui::Window) {
     window.bind("event:publish", move |event| {
-        let data = match read_event_payload(&event) {
+        let data = match handler_utils::read_event_payload(&event) {
             Some(payload) => payload,
             None => {
                 log::error!("event:publish missing payload");
@@ -79,7 +70,7 @@ pub fn setup_event_bus_handlers(window: &mut webui_rs::webui::Window) {
     });
 
     window.bind("event:history", move |event| {
-        let data = match read_event_payload(&event) {
+        let data = match handler_utils::read_event_payload(&event) {
             Some(payload) => payload,
             None => {
                 log::error!("event:history missing payload");

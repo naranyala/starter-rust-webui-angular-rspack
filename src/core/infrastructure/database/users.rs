@@ -7,7 +7,7 @@ use rusqlite::{params, OptionalExtension};
 
 use super::connection::Database;
 use super::models::User;
-use crate::core::error::{AppError, ErrorCode, ErrorValue};
+use crate::core::errors::{AppError, ErrorCode, ErrorValue};
 
 /// Database operation result type alias
 type DbResult<T> = Result<T, AppError>;

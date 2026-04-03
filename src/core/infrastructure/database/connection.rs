@@ -7,7 +7,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, Result as SqliteResult, ToSql};
 use std::time::Duration;
 
-use crate::core::error::{AppError, AppResult, ErrorCode, ErrorValue};
+use crate::core::errors::{AppError, AppResult, ErrorCode, ErrorValue};
 
 use super::models::QueryResult;
 
@@ -291,9 +291,9 @@ mod tests {
         let conn1 = db.get_conn().expect("Failed to get connection");
         let conn2 = db.get_conn().expect("Failed to get second connection");
 
-        // Both connections should be usable
-        assert!(conn1.is_valid().is_ok());
-        assert!(conn2.is_valid().is_ok());
+        // Both connections should be usable — execute a simple query
+        assert!(conn1.query_row("SELECT 1", [], |row| row.get::<_, i32>(0)).is_ok());
+        assert!(conn2.query_row("SELECT 1", [], |row| row.get::<_, i32>(0)).is_ok());
 
         // Check pool stats
         let stats = db.pool_stats();
@@ -322,7 +322,7 @@ mod tests {
         db.init().expect("Failed to init");
 
         // This should rollback due to error
-        let result = db.transaction(|conn| {
+        let result: Result<(), AppError> = db.transaction(|conn| {
             conn.execute(
                 "INSERT INTO users (name, email, role, status) VALUES (?, ?, ?, ?)",
                 ["Test User", "test@example.com", "Admin", "Active"],

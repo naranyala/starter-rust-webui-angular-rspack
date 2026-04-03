@@ -2,12 +2,12 @@
 // Order-specific database operations with connection pooling
 
 use chrono::Local;
-use log::{error, info};
+use log::info;
 use rusqlite::OptionalExtension;
 
 use super::connection::Database;
 use super::models::Order;
-use crate::core::error::{AppError, ErrorCode, ErrorValue};
+use crate::core::errors::{AppError, ErrorCode, ErrorValue};
 
 /// Database operation result type alias
 type DbResult<T> = Result<T, AppError>;

@@ -26,7 +26,6 @@ pub mod management;
 pub mod models;
 pub mod orders;
 pub mod products;
-pub mod repositories;
 pub mod users;
 
 pub use connection::Database;

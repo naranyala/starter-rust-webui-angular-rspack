@@ -230,6 +230,29 @@ impl AppConfig {
     pub fn is_resizable(&self) -> bool {
         self.window.resizable.unwrap_or(true)
     }
+
+    /// Log the communication configuration in a structured format (replaces ASCII art in main.rs).
+    pub fn log_communication_config(&self) {
+        let transport = self.get_transport();
+        let serialization = self.get_serialization();
+
+        let transport_desc = match transport {
+            "webview_ffi" => "WebView FFI (Native Binding)",
+            "http_rest" => "HTTP/REST",
+            "websocket" => "WebSocket",
+            _ => "WebView FFI",
+        };
+        let serialization_desc = match serialization {
+            "json" => "JSON (serde_json)",
+            "messagepack" => "MessagePack (rmp-serde)",
+            "cbor" => "CBOR (serde_cbor)",
+            _ => "JSON",
+        };
+
+        log::info!("Communication: transport={}, serialization={}", transport, serialization);
+        log::info!("  Transport: {}", transport_desc);
+        log::info!("  Serialization: {}", serialization_desc);
+    }
 }
 
 // Configuration for build-time access

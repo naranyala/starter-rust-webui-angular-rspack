@@ -1,13 +1,12 @@
 // src/core/infrastructure/database/products.rs
 // Product-specific database operations with connection pooling
 
-use chrono::Local;
-use log::{error, info};
-use rusqlite::{params, OptionalExtension};
+use log::info;
+use rusqlite::OptionalExtension;
 
 use super::connection::Database;
 use super::models::Product;
-use crate::core::error::{AppError, ErrorCode, ErrorValue};
+use crate::core::errors::{AppError, ErrorCode, ErrorValue};
 
 /// Database operation result type alias
 type DbResult<T> = Result<T, AppError>;

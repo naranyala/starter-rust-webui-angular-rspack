@@ -6,7 +6,7 @@
 //! - Database statistics
 //! - Safe data cleanup operations
 
-use crate::core::error::{AppError, AppResult, ErrorCode, ErrorValue};
+use crate::core::errors::{AppError, AppResult, ErrorCode, ErrorValue};
 use crate::core::infrastructure::database::Database;
 use log::{error, info};
 use std::fs;

@@ -2,7 +2,8 @@
 // Supports both WebUI bridge (desktop) and HTTP fallback (web deployment)
 // SECURITY: Includes input validation and function whitelisting
 import { Injectable, signal, computed } from '@angular/core';
-import { DEFAULT_TIMEOUT_MS } from '../app/constants/app.constants';
+import { DEFAULT_TIMEOUT_MS } from '../constants/app.constants';
+import { ALLOWED_FUNCTIONS } from '../constants/api-contract';
 
 export type CommunicationMode = 'webui' | 'http' | 'auto';
 
@@ -26,22 +27,6 @@ export interface ApiState {
   communicationMode: CommunicationMode;
   httpAvailable: boolean;
 }
-
-// SECURITY: Whitelist of allowed backend functions
-const ALLOWED_FUNCTIONS = [
-  // User operations
-  'getUsers', 'getUserStats', 'createUser', 'deleteUser', 'updateUser', 'forceDeleteUser',
-  // Product operations
-  'getProducts',
-  // Order operations
-  'getOrders',
-  // DuckDB operations
-  'duckdbGetUsers', 'duckdbCreateUser', 'duckdbDeleteUser', 'duckdbExecuteQuery',
-  // SQLite operations
-  'sqliteExecuteQuery',
-  // Core operations
-  'ping', 'getData', 'emitEvent',
-];
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {

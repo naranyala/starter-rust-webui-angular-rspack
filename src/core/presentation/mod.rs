@@ -1,6 +1,3 @@
-// views/mod.rs
-// Presentation layer - UI handlers and views
+// Presentation layer - WebUI event handlers
 
 pub mod webui;
-
-pub use webui::*;

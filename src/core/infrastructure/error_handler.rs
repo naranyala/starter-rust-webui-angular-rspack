@@ -1,7 +1,7 @@
 // src/core/infrastructure/error_handler.rs
 // Enhanced error handling with panic hooks, error tracking, and terminal output
 
-use crate::core::error::ErrorCode;
+use crate::core::errors::ErrorCode;
 use log::{error, info, warn};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -299,7 +299,7 @@ pub fn init_error_handling() {
 }
 
 /// Record an error from AppError
-pub fn record_app_error(source: &'static str, err: &crate::core::error::AppError) {
+pub fn record_app_error(source: &'static str, err: &crate::core::errors::AppError) {
     let error_value = err.to_value();
 
     let severity = match error_value.code {

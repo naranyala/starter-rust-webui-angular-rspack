@@ -289,6 +289,29 @@ export const TIME_CONSTANTS = {
 } as const;
 
 // ============================================================================
+// Design System Colors
+// ============================================================================
+
+export const COLORS = {
+  PRIMARY: '#3b82f6',
+  SUCCESS: '#10b981',
+  WARNING: '#f59e0b',
+  ERROR: '#ef4444',
+  INFO: '#06b6d4',
+  MUTED: '#64748b',
+  BORDER: 'rgba(148, 163, 184, 0.1)',
+  CARD_BG: 'rgba(30, 41, 59, 0.5)',
+} as const;
+
+// ============================================================================
+// Derived Constants (for backward compatibility with imports from app/constants)
+// ============================================================================
+
+export const DEFAULT_TIMEOUT_MS = API_CONFIG.defaultTimeoutMs;
+export const STATE_SYNC_INTERVAL_MS = SYNC_CONFIG.defaultIntervalMs;
+export const DEFAULT_PAGE_SIZE = PAGINATION_CONFIG.defaultPageSize;
+
+// ============================================================================
 // Export combined config
 // ============================================================================
 

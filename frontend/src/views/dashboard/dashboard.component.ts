@@ -4,13 +4,13 @@
  * Main dashboard with statistics and navigation to different data views
  */
 
-import { Component, signal, inject, OnInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, signal, inject, ViewChild, ElementRef, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { MarkdownModule } from 'ngx-markdown';
 import { LoggerService } from '../../core/logger.service';
 import { ApiService } from '../../core/api.service';
+import { WelcomeComponent } from '../welcome/welcome.component';
 import { DuckdbUsersComponent } from '../duckdb/duckdb-users.component';
 import { DuckdbProductsComponent } from '../duckdb/duckdb-products.component';
 import { DuckdbOrdersComponent } from '../duckdb/duckdb-orders.component';
@@ -45,6 +45,7 @@ export interface NavItem {
   imports: [
     CommonModule,
     MarkdownModule,
+    WelcomeComponent,
     DuckdbUsersComponent,
     DuckdbProductsComponent,
     DuckdbOrdersComponent,
@@ -138,7 +139,9 @@ export interface NavItem {
 
         <!-- Content Area -->
         <div class="content-area" #contentArea>
-          @if (activeView() === 'demo_sqlite_crud') {
+          @if (activeView() === 'welcome') {
+            <app-welcome [stats]="welcomeStats()" [navigateTo]="setActiveView" />
+          } @else if (activeView() === 'demo_sqlite_crud') {
             <app-demo-sqlite-crud />
           } @else if (activeView() === 'demo_duckdb_crud') {
             <app-demo-duckdb-crud />

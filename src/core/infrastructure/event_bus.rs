@@ -4,7 +4,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
-use crate::core::error::{AppError, AppResult, ErrorCode, ErrorValue};
+use crate::core::errors::{AppError, AppResult, ErrorCode, ErrorValue};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EventData {
